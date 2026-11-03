@@ -8,7 +8,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "PokeDev · Catch every builder at Devcon",
-  description: "Catch people, not Pokémon. Catch every builder at Devcon 8 India. Top 3 PokeDev masters win a prize.",
+  description: "Catch people like Pokémon. Catch every builder at Devcon 8 India. Top 3 PokeDev masters win a prize.",
   applicationName: "PokeDev",
   appleWebApp: { capable: true, title: "PokeDev · Catch every builder at Devcon", statusBarStyle: "black-translucent" },
   formatDetection: { telephone: false },

@@ -19,7 +19,7 @@ export default function QrSheet({ inviter, onClose }: { inviter: string; onClose
 
   async function share() {
     try {
-      if (navigator.share) await navigator.share({ title: "PokeDev", text: "Catch people, not Pokémon. Join PokeDev and catch every builder at Devcon. Top 3 win a prize!", url });
+      if (navigator.share) await navigator.share({ title: "PokeDev", text: "Catch people like Pokémon. Join PokeDev and catch every builder at Devcon. Top 3 win a prize!", url });
       else await navigator.clipboard.writeText(url);
     } catch {
       /* user cancelled */

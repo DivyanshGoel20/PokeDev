@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "PokeDev",
     short_name: "PokeDev",
-    description: "Catch people, not Pokémon. Catch every builder at Devcon.",
+    description: "Catch people like Pokémon. Catch every builder at Devcon.",
     start_url: "/",
     display: "standalone",
     orientation: "portrait",

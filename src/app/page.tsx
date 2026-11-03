@@ -45,7 +45,7 @@ function Landing() {
             </h1>
             <p style={{ margin: "12px 0 0", fontWeight: 700, fontSize: 18, lineHeight: 1.35 }}>Catch every builder at Devcon</p>
             <p className="px" style={{ margin: "14px 0 0", fontSize: 10, lineHeight: 1.8 }}>
-              CATCH PEOPLE, NOT POKEMON.
+              CATCH PEOPLE LIKE POKEMON.
             </p>
           </div>
         </div>

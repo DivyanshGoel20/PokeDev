@@ -86,9 +86,9 @@ export default function Home({
                 {me.catchable ? "CATCH EVERY BUILDER" : "HIDE MODE ON"}
               </div>
               <div style={{ fontSize: 25, fontWeight: 700, lineHeight: 1.1, margin: "8px 0 14px" }}>
-                Catch people,
+                Catch people
                 <br />
-                not Pokémon.
+                like Pokémon.
               </div>
               <span
                 style={{

@@ -93,7 +93,7 @@ export default function Join() {
           <form onSubmit={next} className="screen" key="s0">
             <div className="dialog" style={{ marginBottom: 22 }}>
               {invite
-                ? `${invite.name} just tried to catch you, but you're not live yet! Join now and you'll land in their PokeDev. Catch people, not Pokémon: first, pick a username.`
+                ? `${invite.name} just tried to catch you, but you're not live yet! Join now and you'll land in their PokeDev. Catch people like Pokémon! First, pick a username.`
                 : ref
                   ? `@${ref} invited you to PokeDev! Catch every builder at Devcon. First, pick a username.`
                   : "Hi there, future trainer! Catch every builder at Devcon. First, pick a username."}
