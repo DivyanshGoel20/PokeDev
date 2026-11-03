@@ -42,6 +42,14 @@ function Landing() {
             </div>
           </div>
           <div className="lcd center" style={{ padding: "22px 14px 20px", marginTop: 10 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/pokedev-logo-512.png"
+              alt="Find me at Pokedev.in"
+              width={150}
+              height={150}
+              style={{ width: 150, height: 150, borderRadius: 26, border: "3px solid var(--ink)", boxShadow: "0 4px 0 var(--ink)", margin: "0 auto 18px", display: "block" }}
+            />
             <h1 className="px" style={{ fontSize: 26, lineHeight: 1.3 }}>
               POKEDEV
             </h1>

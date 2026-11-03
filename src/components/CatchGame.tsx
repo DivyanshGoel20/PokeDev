@@ -387,7 +387,53 @@ export default function CatchGame({
     const INK = "#1d1d22";
     const mark = new Image();
     mark.src = "/devcon/devcon-mark.png";
+    // The PokeDev ball artwork; the vector ball below is only a fallback until it loads.
+    const ballImg = new Image();
+    ballImg.src = "/brand/ball.png";
+
     function drawBall(x: number, y: number, s: number, rot = 0, open = 0, glow = 0) {
+      if (!ballImg.complete || !ballImg.naturalWidth) return drawVectorBall(x, y, s, rot, open, glow);
+      const r = R * s;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rot);
+      if (open <= 0.01) {
+        ctx.drawImage(ballImg, -r, -r, r * 2, r * 2);
+      } else {
+        // bottom half
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(-r - 2, 0, r * 2 + 4, r + 2);
+        ctx.clip();
+        ctx.drawImage(ballImg, -r, -r, r * 2, r * 2);
+        ctx.restore();
+        // light spilling out
+        ctx.fillStyle = `rgba(255,240,200,${open})`;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, r * 0.95, r * 0.3, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // top half, hinged open at the back
+        ctx.save();
+        ctx.translate(-r, 0);
+        ctx.rotate(-open * 1.1);
+        ctx.translate(r, 0);
+        ctx.beginPath();
+        ctx.rect(-r - 2, -r - 2, r * 2 + 4, r + 2);
+        ctx.clip();
+        ctx.drawImage(ballImg, -r, -r, r * 2, r * 2);
+        ctx.restore();
+      }
+      if (glow > 0 && open <= 0.01) {
+        // the center button lights up while the ball wobbles
+        ctx.fillStyle = `rgba(255,214,90,${0.65 * glow})`;
+        ctx.beginPath();
+        ctx.arc(0, 0, r * 0.17, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function drawVectorBall(x: number, y: number, s: number, rot = 0, open = 0, glow = 0) {
       const r = R * s;
       const lw = Math.max(2, 4 * s);
       ctx.save();

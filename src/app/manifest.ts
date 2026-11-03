@@ -11,8 +11,8 @@ export default function manifest(): MetadataRoute.Manifest {
     background_color: "#f3efe6",
     theme_color: "#2f2c9e",
     icons: [
-      { src: "/icon", sizes: "512x512", type: "image/png" },
-      { src: "/apple-icon", sizes: "180x180", type: "image/png" },
+      { src: "/brand/pokedev-logo-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: "/brand/pokedev-logo-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
     ],
   };
 }
