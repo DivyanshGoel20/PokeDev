@@ -90,9 +90,9 @@ function Landing() {
         </div>
         <div className="panel">
           <ul className="list-plain">
-            <li>No photos or videos are ever taken or uploaded. The camera only reads faces in the moment.</li>
+            <li>The camera never records or uploads photos or videos. It only reads faces in the moment, on your phone.</li>
             <li>Your face scan is saved as 128 numbers used only for matching.</li>
-            <li>Only registered players can be caught. If you throw at someone who isn&apos;t playing, only their 128 numbers stay on your phone (never our servers) for up to 3 days, in case they join.</li>
+            <li>Only registered players can be caught. If you throw at someone who isn&apos;t playing, nothing about them is kept, anywhere.</li>
             <li>Your profile picture is optional, and only players who catch you can see it.</li>
             <li>Hide mode any time. Deleting your account erases everything.</li>
           </ul>
