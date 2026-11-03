@@ -77,7 +77,14 @@ async function createRunner(): Promise<Runner> {
     };
   }
 
-  await exec(SCHEMA);
+  // Cold starts: one cheap check instead of re-running every migration statement.
+  const ready = await run(
+    `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'invite_token')
+        AND EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'rate_limits')
+        AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'catches' AND column_name = 'photo')
+        AS ok`,
+  ).catch(() => [{ ok: false }]);
+  if (!ready[0]?.ok) await exec(SCHEMA);
   return run;
 }
 

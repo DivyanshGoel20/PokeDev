@@ -1,5 +1,5 @@
 import { typeInfo } from "@/lib/types";
-import { BrandBall } from "./BrandBall";
+import { LogoLink } from "./LogoLink";
 
 export function dexNo(n: number) {
   return `No.${String(n).padStart(3, "0")}`;
@@ -160,7 +160,7 @@ export function Lid({
             <Icon.back />
           </a>
         ) : null}
-        <BrandBall size={big ? 50 : 38} />
+        <LogoLink size={big ? 50 : 38} />
         {right ?? (
           <div className="lid-title">
             <b>{title}</b>

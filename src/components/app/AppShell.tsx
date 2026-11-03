@@ -5,6 +5,7 @@ import type { AppState, DexEntry } from "@/lib/types";
 import { loadFace } from "@/lib/face";
 import { DevBall } from "../DevBall";
 import { Icon } from "../ui";
+import { GoHomeContext } from "../LogoLink";
 import Home from "./Home";
 import Dex from "./Dex";
 import Ranks from "./Ranks";
@@ -34,7 +35,7 @@ export default function AppShell({ initial }: { initial: AppState }) {
     try {
       const r = await fetch("/api/state", { cache: "no-store" });
       if (r.status === 401) {
-        window.location.href = "/";
+        window.location.replace("/");
         return null;
       }
       if (!r.ok) return null;
@@ -131,7 +132,17 @@ export default function AppShell({ initial }: { initial: AppState }) {
     const h = window.location.hash.slice(1) as Tab;
     if (TABS.includes(h)) setTabState(h);
     window.history.replaceState(null, "", window.location.pathname + window.location.hash);
-    const onPop = (e: PopStateEvent) => setOverlay((e.state as Overlay) ?? null);
+    // Next.js keeps its own data in history.state, so only our `o` marker means "overlay".
+    const onPop = (e: PopStateEvent) => {
+      const o = (e.state as { o?: string } | null)?.o ? (e.state as Overlay) : null;
+      setOverlay(o);
+      if (homeAfterPop.current && !o) {
+        homeAfterPop.current = false;
+        window.history.replaceState(null, "", "#home");
+        setTabState("home");
+        window.scrollTo(0, 0);
+      }
+    };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
@@ -150,6 +161,20 @@ export default function AppShell({ initial }: { initial: AppState }) {
   const close = useCallback(() => window.history.back(), []);
 
   const openCatch = useCallback(() => open({ o: "catch" }), [open]);
+  // Header ball: close any open sheet and go to the Home tab.
+  const homeAfterPop = useRef(false);
+  const goHome = useCallback(() => {
+    // An open sheet/camera has its own history entry: step back over it first so Back stays sane.
+    if ((window.history.state as { o?: string } | null)?.o) {
+      homeAfterPop.current = true;
+      window.history.back();
+      return;
+    }
+    setOverlay(null);
+    window.history.replaceState(null, "", "#home");
+    setTabState("home");
+    window.scrollTo(0, 0);
+  }, []);
   const openEntry = useCallback((no: number) => open({ o: "entry", no }), [open]);
   const openQr = useCallback(() => open({ o: "qr" }), [open]);
 
@@ -165,7 +190,7 @@ export default function AppShell({ initial }: { initial: AppState }) {
   const entry = overlay?.o === "entry" ? state.dex.find((e) => e.no === overlay.no) : undefined;
 
   return (
-    <>
+    <GoHomeContext.Provider value={goHome}>
       <div key={tab} className="screen">
         {tab === "home" && <Home state={state} onCatch={openCatch} onEntry={openEntry} onInvite={openQr} setTab={setTab} />}
         {tab === "dex" && <Dex state={state} onEntry={openEntry} />}
@@ -239,7 +264,7 @@ export default function AppShell({ initial }: { initial: AppState }) {
           onOpenEntry={(no) => open({ o: "entry", no }, true)}
         />
       )}
-    </>
+    </GoHomeContext.Provider>
   );
 }
 

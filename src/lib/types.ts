@@ -70,7 +70,12 @@ export type AppState = { me: Me; dex: DexEntry[]; ranks: RankRow[]; caughtBy: Ca
 export const FRONTAL_MIN = 0.55;
 export const FRONTAL_MIN_SCAN = 0.65;
 
-/** Max euclidean distance between face descriptors to count as the same person. */
-export const MATCH_THRESHOLD = 0.45;
-/** If the runner-up is this close to the best match, the result is ambiguous and rejected. */
-export const MATCH_MARGIN = 0.06;
+/**
+ * Face matching (euclidean distance between 128-number fingerprints; same person is usually < 0.45).
+ * - STRONG: close match, accepted unless another player is almost as close.
+ * - LOOSE: accepted only when clearly closer than everyone else.
+ * - Up to UNSURE we never claim "not a player"; we ask for a better look instead.
+ */
+export const MATCH = { STRONG: 0.47, STRONG_MARGIN: 0.04, LOOSE: 0.55, LOOSE_MARGIN: 0.1, UNSURE: 0.62 } as const;
+/** Registering a face this close to another player's is refused (one face, one account). */
+export const DUPLICATE_FACE = 0.4;

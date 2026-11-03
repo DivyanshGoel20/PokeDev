@@ -1,5 +1,5 @@
 "use client";
-import { TYPES, TYPE_KEYS, type AppState } from "@/lib/types";
+import type { AppState } from "@/lib/types";
 import { levelInfo } from "@/lib/levels";
 import { DevBall } from "../DevBall";
 import { Lid, Portrait, dexNo } from "../ui";
@@ -23,8 +23,6 @@ export default function Home({
   const others = dex.filter((e) => !e.isMe);
   const caught = others.filter((e) => e.caught);
   const recent = [...caught].sort((a, b) => Date.parse(b.caughtAt!) - Date.parse(a.caughtAt!)).slice(0, 10);
-  const typesCaught = new Set(caught.map((c) => c.type));
-  const pct = others.length ? Math.round((caught.length / others.length) * 100) : 0;
   const lv = levelInfo(me.catchCount);
 
   return (
@@ -158,46 +156,6 @@ export default function Home({
           </div>
         </div>
 
-        {/* progress */}
-        <div className="section-label">
-          <span>PokeDev progress</span>
-          <button className="px" onClick={() => setTab("dex")} style={{ background: "none", border: 0, fontSize: 10, color: "var(--red)" }}>
-            VIEW ›
-          </button>
-        </div>
-        <div className="panel">
-          <div className="row spread" style={{ marginBottom: 10 }}>
-            <div>
-              <span className="px" style={{ fontSize: 20 }}>{caught.length}</span>
-              <span className="muted" style={{ fontWeight: 600 }}>
-                {" "}
-                / {others.length} builders caught
-              </span>
-            </div>
-            <span className="px" style={{ fontSize: 11 }}>
-              {pct}%
-            </span>
-          </div>
-          <div className="bar">
-            <i style={{ width: `${pct}%` }} />
-          </div>
-        </div>
-
-        <div className="stat-grid" style={{ marginTop: 10 }}>
-          <div className="stat">
-            <b>{me.catchCount}</b>
-            <span>Caught</span>
-          </div>
-          <div className="stat">
-            <b>{me.caughtCount}</b>
-            <span>Times caught</span>
-          </div>
-          <div className="stat">
-            <b>{me.catchCount ? `#${me.rank}` : "-"}</b>
-            <span>Rank</span>
-          </div>
-        </div>
-
         {/* recent */}
         <div className="section-label">
           <span>Recent catches</span>
@@ -290,22 +248,6 @@ export default function Home({
           <span>→</span>
         </button>
 
-        {/* types */}
-        <div className="section-label">
-          <span>Types collected</span>
-          <span>
-            {typesCaught.size}/{TYPE_KEYS.length}
-          </span>
-        </div>
-        <div className="panel" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {TYPE_KEYS.map((k) => (
-            <span key={k} style={{ opacity: typesCaught.has(k) ? 1 : 0.28, filter: typesCaught.has(k) ? "none" : "grayscale(1)" }}>
-              <span className="type" style={{ background: TYPES[k].color, color: TYPES[k].fg }}>
-                {TYPES[k].label}
-              </span>
-            </span>
-          ))}
-        </div>
       </main>
     </>
   );

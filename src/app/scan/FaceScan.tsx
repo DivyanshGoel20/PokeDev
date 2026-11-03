@@ -220,11 +220,10 @@ export default function FaceScan({ isNew, hasFace, name }: { isNew: boolean; has
                 ? "Your journey begins! Find other builders and throw a DevBall at them."
                 : "Your face fingerprint was updated."}
             </div>
-            {/* full page load on purpose: the home page needs fresh server state */}
-            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-            <a href="/" className="btn btn-red" style={{ marginTop: 18 }}>
+            {/* full page load (fresh server state), replacing history so Back doesn't return to the scan */}
+            <button className="btn btn-red" style={{ marginTop: 18 }} onClick={() => window.location.replace(isNew ? "/" : "/#me")}>
               {isNew ? "Let's go!" : "Back to PokeDev"}
-            </a>
+            </button>
           </div>
         )}
       </main>

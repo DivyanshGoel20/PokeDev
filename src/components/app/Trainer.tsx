@@ -25,6 +25,9 @@ export default function Trainer({ state, refresh, onInvite }: { state: AppState;
   const [busy, setBusy] = useState(false);
   const [errs, setErrs] = useState<FieldErrors>({});
   const typesCaught = new Set(dex.filter((e) => e.caught).map((e) => e.type));
+  const others = dex.filter((e) => !e.isMe).length;
+  const owned = dex.filter((e) => e.caught).length;
+  const pct = others ? Math.round((owned / others) * 100) : 0;
 
   async function toggleCatchable() {
     const next = !catchable;
@@ -58,13 +61,13 @@ export default function Trainer({ state, refresh, onInvite }: { state: AppState;
 
   async function logout() {
     await postJSON("/api/logout", {});
-    window.location.href = "/";
+    window.location.replace("/");
   }
 
   async function del() {
     if (!confirm("Delete your account, face data and all catches? This can't be undone.")) return;
     await postJSON("/api/me", undefined, "DELETE");
-    window.location.href = "/";
+    window.location.replace("/");
   }
 
   return (
@@ -145,25 +148,40 @@ export default function Trainer({ state, refresh, onInvite }: { state: AppState;
                   </div>
                 ))}
               </div>
-              <div style={{ padding: "12px 14px 14px", borderTop: "2px dashed var(--line)" }}>
-                <div className="px muted" style={{ fontSize: 8, marginBottom: 10 }}>
-                  TYPE BADGES
+              <div style={{ padding: "12px 14px", borderTop: "2px dashed var(--line)" }}>
+                <div className="row spread px muted" style={{ fontSize: 8, marginBottom: 10 }}>
+                  <span>POKEDEV PROGRESS</span>
+                  <span>{pct}%</span>
                 </div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <div className="bar">
+                  <i style={{ width: `${pct}%` }} />
+                </div>
+                <div className="small muted" style={{ marginTop: 8, fontWeight: 600 }}>
+                  {owned} of {others} builders caught
+                </div>
+              </div>
+              <div style={{ padding: "12px 14px 14px", borderTop: "2px dashed var(--line)" }}>
+                <div className="row spread px muted" style={{ fontSize: 8, marginBottom: 10 }}>
+                  <span>TYPES COLLECTED</span>
+                  <span>
+                    {typesCaught.size}/{TYPE_KEYS.length}
+                  </span>
+                </div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   {TYPE_KEYS.map((k) => (
                     <span
                       key={k}
                       title={TYPES[k].name}
+                      className="type"
                       style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: "50%",
-                        border: "2.5px solid var(--ink)",
                         background: typesCaught.has(k) ? TYPES[k].color : "var(--paper-2)",
-                        opacity: typesCaught.has(k) ? 1 : 0.35,
-                        boxShadow: typesCaught.has(k) ? "inset 0 -3px 0 rgba(0,0,0,.2)" : "none",
+                        color: typesCaught.has(k) ? TYPES[k].fg : "var(--muted)",
+                        opacity: typesCaught.has(k) ? 1 : 0.55,
+                        minWidth: 0,
                       }}
-                    />
+                    >
+                      {TYPES[k].label}
+                    </span>
                   ))}
                 </div>
               </div>

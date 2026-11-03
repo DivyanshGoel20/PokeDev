@@ -5,6 +5,7 @@ import { buildState } from "@/lib/users";
 import { DevBall } from "@/components/DevBall";
 import { Lid } from "@/components/ui";
 import AppShell from "@/components/app/AppShell";
+import { FreshOnBack } from "@/components/FreshOnBack";
 import { DevconChip, Disclaimer, PrizeBanner } from "@/components/DevconBits";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,7 @@ export default async function Home() {
 function Landing() {
   return (
     <>
+      <FreshOnBack />
       <Lid title="POKEDEV" subtitle="Catch every builder" />
       <main className="wrap plain">
         <div className="bezel screen" style={{ marginTop: 6 }}>

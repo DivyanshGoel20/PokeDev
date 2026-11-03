@@ -169,7 +169,8 @@ export function parseLinks(raw: string | null | undefined): Link[] {
 export function cleanLinks(v: unknown): Link[] {
   if (!Array.isArray(v)) return [];
   const out: Link[] = [];
-  for (const item of v.slice(0, MAX_LINKS)) {
+  for (const item of v.slice(0, 20)) {
+    if (out.length >= MAX_LINKS) break;
     const it = item as { label?: unknown; url?: unknown };
     let url = cleanText(it.url, 200).replace(/\s/g, "");
     if (!url) continue;

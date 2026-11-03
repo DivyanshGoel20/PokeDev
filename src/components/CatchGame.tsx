@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { cameraErrorMessage, coverMap, describeFaces, detectBoxes, loadFace, startCamera, stopCamera, type Box, type TrackedFace } from "@/lib/face";
+import { cameraErrorMessage, coverMap, describeFaces, detectBoxes, distance, loadFace, meanDescriptor, startCamera, stopCamera, type Box, type TrackedFace } from "@/lib/face";
 import QRCode from "qrcode";
 import { postJSON } from "@/lib/client";
 import { sfx } from "@/lib/sfx";
@@ -35,7 +35,7 @@ const MESSAGES: Record<Exclude<CatchResult, "caught" | "already">, string> = {
   nomatch: "Oh no! It broke free! This builder isn't a PokeDev player yet. Tell them to join!",
   hidden: "This builder is in hide mode right now. Try again later!",
   self: "That's you! You can't catch yourself.",
-  unclear: "Couldn't get a clear look. Get a bit closer and try again!",
+  unclear: "Almost! Couldn't get a clear enough look. Get closer, face to face, in good light, and throw again.",
   side: "It broke free! They were facing sideways. Builders can only be caught face to face!",
   far: "Too far away! Get a little closer so the DevBall can read their face.",
   error: "Signal lost! Check your connection and try again.",
@@ -92,7 +92,7 @@ export default function CatchGame({
     (async () => {
       try {
         stopCamera(streamRef.current);
-        const [stream] = await Promise.all([startCamera(videoRef.current!, facing), loadFace()]);
+        const [stream] = await Promise.all([startCamera(videoRef.current!, facing, true), loadFace()]);
         if (cancelled) return stopCamera(stream);
         streamRef.current = stream;
         g.current.mirrored = facing === "user";
@@ -153,49 +153,61 @@ export default function CatchGame({
   const resolveCatch = useCallback(
     async (target: Box) => {
       const v = videoRef.current!;
-      const snap = document.createElement("canvas");
-      snap.width = v.videoWidth;
-      snap.height = v.videoHeight;
-      snap.getContext("2d")!.drawImage(v, 0, 0);
       g.current.tracking = false;
-      const tcx = target.x + target.width / 2;
-      const tcy = target.y + target.height / 2;
       try {
-        const faces = await describeFaces(snap);
-        snap.width = snap.height = 0; // drop the frame
-        let best: (typeof faces)[number] | null = null;
-        let bestD = Infinity;
-        for (const f of faces) {
-          const d = Math.hypot(f.box.x + f.box.width / 2 - tcx, f.box.y + f.box.height / 2 - tcy);
-          if (d < bestD) {
-            bestD = d;
-            best = f;
+        // Read the target's face over several frames while the ball flies and wobbles, and
+        // average them: one frame is noisy, a few averaged frames match far more reliably.
+        let c = { x: target.x + target.width / 2, y: target.y + target.height / 2 };
+        let w = target.width;
+        const samples: number[][] = [];
+        let sawFace = false;
+        let sawFrontal = false;
+        let tooSmall = false;
+        const deadline = performance.now() + 1700;
+        while (samples.length < 4 && performance.now() < deadline) {
+          const faces = await describeFaces(v).catch(() => []);
+          let f: (typeof faces)[number] | null = null;
+          let bestD = Infinity;
+          for (const x of faces) {
+            const d = Math.hypot(x.box.x + x.box.width / 2 - c.x, x.box.y + x.box.height / 2 - c.y);
+            if (d < bestD && d < Math.max(w, 60) * 1.2) {
+              bestD = d;
+              f = x;
+            }
           }
+          if (!f) continue;
+          sawFace = true;
+          c = { x: f.box.x + f.box.width / 2, y: f.box.y + f.box.height / 2 };
+          w = f.box.width;
+          if (f.frontal < FRONTAL_MIN) continue; // side-on frames give unreliable fingerprints
+          sawFrontal = true;
+          if (f.box.width < 64) {
+            tooSmall = true;
+            continue;
+          }
+          samples.push(f.descriptor);
         }
-        if (!best || bestD > Math.max(target.width, 60)) {
-          g.current.result = { result: "unclear" };
+        if (!samples.length) {
+          g.current.result = { result: !sawFace ? "unclear" : !sawFrontal ? "side" : tooSmall ? "far" : "unclear" };
           return;
         }
-        // Side profiles give unreliable fingerprints: only face-on catches count.
-        if (best.frontal < FRONTAL_MIN) {
-          g.current.result = { result: "side" };
-          return;
-        }
-        // Tiny faces give unreliable fingerprints too.
-        if (best.box.width < 64) {
-          g.current.result = { result: "far" };
-          return;
+        // Drop an outlier frame (e.g. mid-blink or motion blur) before averaging.
+        let use = samples;
+        if (samples.length >= 3) {
+          const m = meanDescriptor(samples);
+          const worst = samples.reduce((a, b) => (distance(a, m) > distance(b, m) ? a : b));
+          if (distance(worst, m) > 0.25) use = samples.filter((s) => s !== worst);
         }
 
-        const r = await postJSON<ApiResult>("/api/catch", { descriptor: best.descriptor });
+        const r = await postJSON<ApiResult>("/api/catch", { descriptor: meanDescriptor(use) });
         if (r.error) {
           g.current.result = { result: "error", error: r.error };
         } else if ((r.result === "caught" || r.result === "already") && r.username) {
           const entry = await onCaught(r.username);
           g.current.result = { ...r, entry };
         } else if (r.result === "nomatch") {
-          // Not a player yet: nothing about them is kept. Create a one-time invite so that if they
-          // join right now from your QR code, the catch is yours.
+          // Clearly not a player: nothing about them is kept. Create a one-time invite so that if
+          // they join right now from your QR code, the catch is yours.
           const inv = await postJSON<{ token?: string }>("/api/invite", {});
           g.current.result = { result: "nomatch", invite: inv.token ?? null };
         } else {
@@ -263,7 +275,25 @@ export default function CatchGame({
     function onDown(e: PointerEvent) {
       if (S.modalOpen || S.ball.k !== "idle") return;
       const r = rest();
-      if (Math.hypot(e.clientX - r.x, e.clientY - r.y) > R * 2.2) return;
+      if (Math.hypot(e.clientX - r.x, e.clientY - r.y) > R * 2.2) {
+        // Tapped a face? Throw straight at it.
+        const hit = screenBoxes().find(
+          (b) =>
+            e.clientX > b.x - b.width * 0.25 &&
+            e.clientX < b.x + b.width * 1.25 &&
+            e.clientY > b.y - b.height * 0.25 &&
+            e.clientY < b.y + b.height * 1.25,
+        );
+        if (hit) {
+          sfx.unlock();
+          setHintGone(true);
+          const dx = hit.x + hit.width / 2 - r.x;
+          const dy = hit.y + hit.height / 2 - r.y;
+          const len = Math.hypot(dx, dy) || 1;
+          throwBall(r.x, r.y, dx / len, dy / len, 1.2, performance.now());
+        }
+        return;
+      }
       sfx.unlock();
       canvas.setPointerCapture(e.pointerId);
       S.ball = { k: "drag", x: e.clientX, y: e.clientY };
@@ -756,7 +786,10 @@ export default function CatchGame({
           <span style={{ width: 2, height: 14, background: "#ddd5c5" }} />
           <span style={{ color: facesSeen ? "#2f2c9e" : "#847c6d" }}>{status === "ready" ? (facesSeen ? `${facesSeen} IN SIGHT` : "SEARCHING") : "..."}</span>
         </div>
-        <button style={roundBtn} onClick={() => setFacing((f) => (f === "user" ? "environment" : "user"))} aria-label="Flip camera">
+        <button style={roundBtn} onClick={() => {
+            if (g.current.ball.k !== "idle" || g.current.modalOpen) return;
+            setFacing((f) => (f === "user" ? "environment" : "user"));
+          }} aria-label="Flip camera">
           <Icon.flip />
         </button>
       </div>
@@ -779,7 +812,7 @@ export default function CatchGame({
               (facesSeen && !facesFrontal
                 ? "They're side-on! Builders can only be caught face to face. Get them to look at you."
                 : facesSeen
-                  ? "A builder appeared! Swipe the DevBall up at them!"
+                  ? "A builder appeared! Swipe the DevBall at them, or tap their face."
                   : "Point your camera at another player...")}
           </div>
         </div>

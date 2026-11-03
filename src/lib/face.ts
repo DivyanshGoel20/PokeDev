@@ -11,11 +11,9 @@ export function loadFace(): Promise<FaceApi> {
       const faceapi = (await import("@vladmandic/face-api")) as FaceApi;
       // The bundled tfjs is typed loosely; setBackend/ready exist at runtime.
       const tf = faceapi.tf as unknown as { setBackend(b: string): Promise<boolean>; ready(): Promise<void> };
-      try {
-        await tf.setBackend("webgl");
-      } catch {
-        /* fall back to whatever is available */
-      }
+      // WebGL on every modern phone; plain CPU otherwise (we don't ship the wasm backend).
+      const okGl = await tf.setBackend("webgl").catch(() => false);
+      if (!okGl) await tf.setBackend("cpu");
       await tf.ready();
       await Promise.all([
         faceapi.nets.tinyFaceDetector.loadFromUri("/models"),
@@ -119,13 +117,14 @@ export function meanDescriptor(list: number[][]) {
 
 /* ---------------- camera ---------------- */
 
-export async function startCamera(video: HTMLVideoElement, facing: "user" | "environment") {
+export async function startCamera(video: HTMLVideoElement, facing: "user" | "environment", hiRes = false) {
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new Error("Camera not available. Open this site over HTTPS in Safari or Chrome.");
   }
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: false,
-    video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 } },
+    // Catching uses a sharper stream: faces across a hall are small, and detail matters.
+    video: { facingMode: { ideal: facing }, width: { ideal: hiRes ? 1920 : 1280 }, height: { ideal: hiRes ? 1080 : 720 } },
   });
   video.srcObject = stream;
   video.setAttribute("playsinline", "true");
@@ -163,5 +162,8 @@ export function cameraErrorMessage(e: unknown) {
   const name = (e as { name?: string })?.name;
   if (name === "NotAllowedError") return "Camera permission was blocked. Allow camera access in your browser settings and reload.";
   if (name === "NotFoundError") return "No camera found on this device.";
+  if (name === "NotReadableError") return "Your camera is busy in another app. Close it and try again.";
+  if (e instanceof TypeError || /fetch|network|load/i.test((e as Error)?.message ?? ""))
+    return "Couldn't load the scanner. Check your connection and try again.";
   return (e as Error)?.message || "Couldn't start the camera.";
 }
