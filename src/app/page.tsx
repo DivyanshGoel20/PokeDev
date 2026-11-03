@@ -45,7 +45,7 @@ function Landing() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/brand/pokedev-logo-512.png"
-              alt="Find me at Pokedev.in"
+              alt="PokeDev"
               width={150}
               height={150}
               style={{ width: 150, height: 150, borderRadius: 26, border: "3px solid var(--ink)", boxShadow: "0 4px 0 var(--ink)", margin: "0 auto 18px", display: "block" }}

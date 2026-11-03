@@ -385,14 +385,12 @@ export default function CatchGame({
 
     /* ----- drawing ----- */
     const INK = "#1d1d22";
-    const mark = new Image();
-    mark.src = "/devcon/devcon-mark.png";
-    // The PokeDev ball artwork; the vector ball below is only a fallback until it loads.
+    // The PokeDev ball artwork (the only ball design used anywhere in the app).
     const ballImg = new Image();
     ballImg.src = "/brand/ball.png";
 
     function drawBall(x: number, y: number, s: number, rot = 0, open = 0, glow = 0) {
-      if (!ballImg.complete || !ballImg.naturalWidth) return drawVectorBall(x, y, s, rot, open, glow);
+      if (!ballImg.complete || !ballImg.naturalWidth) return; // artwork still loading (a few ms)
       const r = R * s;
       ctx.save();
       ctx.translate(x, y);
@@ -429,80 +427,6 @@ export default function CatchGame({
         ctx.beginPath();
         ctx.arc(0, 0, r * 0.17, 0, Math.PI * 2);
         ctx.fill();
-      }
-      ctx.restore();
-    }
-
-    function drawVectorBall(x: number, y: number, s: number, rot = 0, open = 0, glow = 0) {
-      const r = R * s;
-      const lw = Math.max(2, 4 * s);
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.rotate(rot);
-      // bottom (cream)
-      ctx.fillStyle = "#fffdf8";
-      ctx.beginPath();
-      ctx.arc(0, 0, r, 0, Math.PI);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = "#e7ddcb";
-      ctx.lineWidth = r * 0.14;
-      ctx.beginPath();
-      ctx.arc(0, 0, r * 0.8, Math.PI * 0.18, Math.PI * 0.82);
-      ctx.stroke();
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = lw;
-      ctx.beginPath();
-      ctx.arc(0, 0, r, 0, Math.PI);
-      ctx.stroke();
-      // inside glow when open
-      if (open > 0) {
-        ctx.fillStyle = `rgba(255,240,200,${open})`;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, r * 0.95, r * 0.3, 0, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      // top (red), hinged open at the back
-      ctx.save();
-      if (open > 0) {
-        ctx.translate(-r, 0);
-        ctx.rotate(-open * 1.1);
-        ctx.translate(r, 0);
-      }
-      ctx.fillStyle = "#f2553a";
-      ctx.beginPath();
-      ctx.arc(0, 0, r, Math.PI, Math.PI * 2);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,.55)";
-      ctx.lineWidth = r * 0.13;
-      ctx.lineCap = "round";
-      ctx.beginPath();
-      ctx.arc(0, 0, r * 0.74, Math.PI * 1.12, Math.PI * 1.42);
-      ctx.stroke();
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = lw;
-      ctx.beginPath();
-      ctx.arc(0, 0, r, Math.PI, Math.PI * 2);
-      ctx.closePath();
-      ctx.stroke();
-      ctx.restore();
-      // band + button with the Devcon diamond
-      if (open < 0.05) {
-        ctx.fillStyle = INK;
-        ctx.fillRect(-r, -r * 0.09, r * 2, r * 0.18);
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 0.54, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = glow > 0 ? `rgba(255,${235 - glow * 60},${210 - glow * 90},1)` : "#fffdf8";
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 0.42, 0, Math.PI * 2);
-        ctx.fill();
-        if (mark.complete && mark.naturalWidth) {
-          const h = r * 0.66;
-          const w = h * (mark.naturalWidth / mark.naturalHeight);
-          ctx.drawImage(mark, -w / 2, -h / 2, w, h);
-        }
       }
       ctx.restore();
     }

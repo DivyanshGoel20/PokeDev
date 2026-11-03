@@ -6,7 +6,7 @@ import { createContext, useContext } from "react";
 /** Inside the app shell this switches to the Home tab (and closes overlays) instantly. */
 export const GoHomeContext = createContext<(() => void) | null>(null);
 
-/** The PokeDev logo tile ("Find me at Pokedev.in"). */
+/** The PokeDev logo tile: the Devcon-inspired ball on red. */
 function Logo({ size }: { size: number }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element

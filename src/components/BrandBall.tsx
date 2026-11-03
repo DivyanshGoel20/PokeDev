@@ -1,5 +1,5 @@
 /* eslint-disable @next/next/no-img-element */
-/** The PokeDev ball (from the "Find me at Pokedev.in" logo). */
+/** The PokeDev ball: the Devcon-inspired ball artwork, used for every ball in the app. */
 export function BrandBall({
   size = 48,
   className = "",
