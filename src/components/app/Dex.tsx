@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import type { AppState } from "@/lib/types";
 import { DevBall } from "../DevBall";
-import { Icon, Lid, Portrait, TypeBadge, dexNo } from "../ui";
+import { Icon, Lid, Portrait, TypeBadge } from "../ui";
 
 type Filter = "all" | "caught" | "missing";
 
