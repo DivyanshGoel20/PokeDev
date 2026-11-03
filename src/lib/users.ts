@@ -35,11 +35,22 @@ export async function buildState(meId: number): Promise<AppState | null> {
        ORDER BY u.id`,
       [meId],
     ),
-    q<{ id: number; username: string; display_name: string; type: string; catches: number }>(
-      `SELECT u.id, u.username, u.display_name, u.type, count(c.caught_id)::int AS catches
-       FROM users u LEFT JOIN catches c ON c.catcher_id = u.id
-       WHERE u.face IS NOT NULL
-       GROUP BY u.id ORDER BY catches DESC, u.id ASC LIMIT 100`,
+    // Leaderboard: most catches first; ties go to whoever reached that count first
+    // (the time of their latest catch). Every player gets a unique position.
+    q<{ id: number; username: string; display_name: string; type: string; catches: number; pos: number }>(
+      `WITH t AS (
+         SELECT u.id, u.username, u.display_name, u.type,
+           count(c.caught_id)::int AS catches, max(c.created_at) AS reached_at
+         FROM users u LEFT JOIN catches c ON c.catcher_id = u.id
+         WHERE u.face IS NOT NULL
+         GROUP BY u.id
+       ), r AS (
+         SELECT t.*, row_number() OVER (ORDER BY catches DESC, reached_at ASC NULLS LAST, id ASC)::int AS pos FROM t
+       )
+       SELECT id, username, display_name, type, catches, pos FROM r
+       WHERE pos <= 100 OR id = $1
+       ORDER BY pos`,
+      [meId],
     ),
     q<{ id: number; username: string; display_name: string; type: string; at: string; caught_back: boolean }>(
       `SELECT u.id, u.username, u.display_name, u.type, c.created_at AS at,
@@ -80,16 +91,17 @@ export async function buildState(meId: number): Promise<AppState | null> {
     };
   });
 
-  const ranks: RankRow[] = rankRows.map((r) => ({
+  const ranks: RankRow[] = rankRows.filter((r) => Number(r.pos) <= 100).map((r) => ({
     username: r.username,
     displayName: r.display_name,
     type: r.type as DevType,
     catches: Number(r.catches),
+    rank: Number(r.pos),
     isMe: r.id === meId,
     avatar: visible.get(r.id),
   }));
   const myCatches = Number(meRow.catch_count);
-  const rank = 1 + ranks.filter((r) => r.catches > myCatches).length;
+  const rank = Number(rankRows.find((r) => r.id === meId)?.pos ?? rankRows.length + 1);
 
   const noById = new Map(dexRows.map((r) => [r.id, r.no]));
   const caughtBy: CaughtBy[] = byRows.map((r) => ({

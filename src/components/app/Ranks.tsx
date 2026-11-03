@@ -41,6 +41,9 @@ export default function Ranks({ state, onEntry }: { state: AppState; onEntry: (n
         <div style={{ marginBottom: 18 }}>
           <PrizeBanner rank={me.catchCount ? me.rank : undefined} />
         </div>
+        <p className="small muted center" style={{ margin: "-4px 0 18px", lineHeight: 1.5 }}>
+          Most builders caught wins. Tied? Whoever got there first ranks higher.
+        </p>
         {top.length > 0 && (
           <div className="podium">
             {podium.map((r, i) =>
@@ -69,8 +72,8 @@ export default function Ranks({ state, onEntry }: { state: AppState; onEntry: (n
           </div>
         )}
 
-        {rest.map((r, i) => (
-          <Row key={r.username} r={r} n={i + 4} face={face(r, 42)} onClick={() => tap(r)} />
+        {rest.map((r) => (
+          <Row key={r.username} r={r} n={r.rank} face={face(r, 42)} onClick={() => tap(r)} />
         ))}
 
         {!meInList && (
@@ -79,9 +82,9 @@ export default function Ranks({ state, onEntry }: { state: AppState; onEntry: (n
               <span>You</span>
             </div>
             <Row
-              r={{ username: me.username, displayName: me.displayName, type: me.type, catches: me.catchCount, isMe: true }}
+              r={{ username: me.username, displayName: me.displayName, type: me.type, catches: me.catchCount, rank: me.rank, isMe: true }}
               n={me.rank}
-              face={face({ username: me.username, displayName: me.displayName, type: me.type, catches: 0, isMe: true }, 42)}
+              face={face({ username: me.username, displayName: me.displayName, type: me.type, catches: 0, rank: me.rank, isMe: true }, 42)}
             />
           </>
         )}

@@ -370,6 +370,8 @@ export default function CatchGame({
 
     /* ----- drawing ----- */
     const INK = "#1d1d22";
+    const mark = new Image();
+    mark.src = "/devcon/devcon-mark.png";
     function drawBall(x: number, y: number, s: number, rot = 0, open = 0, glow = 0) {
       const r = R * s;
       const lw = Math.max(2, 4 * s);
@@ -424,25 +426,22 @@ export default function CatchGame({
       ctx.closePath();
       ctx.stroke();
       ctx.restore();
-      // band + button
+      // band + button with the Devcon diamond
       if (open < 0.05) {
         ctx.fillStyle = INK;
-        ctx.fillRect(-r, -r * 0.08, r * 2, r * 0.16);
+        ctx.fillRect(-r, -r * 0.09, r * 2, r * 0.18);
         ctx.beginPath();
-        ctx.arc(0, 0, r * 0.33, 0, Math.PI * 2);
+        ctx.arc(0, 0, r * 0.54, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = glow > 0 ? `rgba(255,${200 - glow * 140},${200 - glow * 160},1)` : "#fffdf8";
+        ctx.fillStyle = glow > 0 ? `rgba(255,${235 - glow * 60},${210 - glow * 90},1)` : "#fffdf8";
         ctx.beginPath();
-        ctx.arc(0, 0, r * 0.22, 0, Math.PI * 2);
+        ctx.arc(0, 0, r * 0.42, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = "#2f2c9e";
-        ctx.beginPath();
-        ctx.moveTo(0, -r * 0.13);
-        ctx.lineTo(r * 0.1, 0);
-        ctx.lineTo(0, r * 0.13);
-        ctx.lineTo(-r * 0.1, 0);
-        ctx.closePath();
-        ctx.fill();
+        if (mark.complete && mark.naturalWidth) {
+          const h = r * 0.66;
+          const w = h * (mark.naturalWidth / mark.naturalHeight);
+          ctx.drawImage(mark, -w / 2, -h / 2, w, h);
+        }
       }
       ctx.restore();
     }

@@ -41,7 +41,7 @@ export type DexEntry = {
   caughtCount?: number;
 };
 
-export type RankRow = { username: string; displayName: string; type: DevType; catches: number; isMe: boolean; avatar?: string };
+export type RankRow = { username: string; displayName: string; type: DevType; catches: number; rank: number; isMe: boolean; avatar?: string };
 
 export type Me = {
   no: number;
