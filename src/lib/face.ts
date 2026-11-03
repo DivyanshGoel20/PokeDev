@@ -4,10 +4,26 @@ import type * as FaceApiNS from "@vladmandic/face-api";
 type FaceApi = typeof FaceApiNS;
 let loading: Promise<FaceApi> | null = null;
 
+function withTimeout<T>(ms: number, message: string, fn: () => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const id = setTimeout(() => reject(new Error(message)), ms);
+    fn().then(
+      (v) => {
+        clearTimeout(id);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(id);
+        reject(e);
+      },
+    );
+  });
+}
+
 /** Lazily load face-api + model weights (only once per page load). */
 export function loadFace(): Promise<FaceApi> {
   if (!loading) {
-    loading = (async () => {
+    loading = withTimeout(60_000, "The face scanner took too long to load. Check your connection and try again.", async () => {
       const faceapi = (await import("@vladmandic/face-api")) as FaceApi;
       // The bundled tfjs is typed loosely; setBackend/ready exist at runtime.
       const tf = faceapi.tf as unknown as { setBackend(b: string): Promise<boolean>; ready(): Promise<void> };
@@ -37,7 +53,7 @@ export function loadFace(): Promise<FaceApi> {
         /* warm-up is best effort */
       }
       return faceapi;
-    })().catch((e) => {
+    }).catch((e) => {
       loading = null;
       throw e;
     });
@@ -71,32 +87,63 @@ export function frontalScore(positions: Pt[]): number {
 export type TrackedFace = Box & { frontal: number };
 
 /**
+ * Copy the current video frame into a reusable canvas, scaled so its long side is at most `maxSide`.
+ * Running the models on a canvas instead of the <video> element is far more reliable on phones
+ * (some mobile browsers hand WebGL blank or stale video frames), and smaller frames are faster.
+ * Returns the canvas and the factor to scale results back to video pixels.
+ */
+const frameCanvases = new Map<number, HTMLCanvasElement>();
+function grabFrame(input: HTMLVideoElement | HTMLCanvasElement, maxSide: number) {
+  if (!(input instanceof HTMLVideoElement)) return { canvas: input, back: 1 };
+  const vw = input.videoWidth;
+  const vh = input.videoHeight;
+  if (!vw || !vh) throw new Error("Camera not ready");
+  const s = Math.min(1, maxSide / Math.max(vw, vh));
+  const w = Math.round(vw * s);
+  const h = Math.round(vh * s);
+  let c = frameCanvases.get(maxSide);
+  if (!c) {
+    c = document.createElement("canvas");
+    frameCanvases.set(maxSide, c);
+  }
+  if (c.width !== w) c.width = w;
+  if (c.height !== h) c.height = h;
+  c.getContext("2d")!.drawImage(input, 0, 0, w, h);
+  return { canvas: c, back: 1 / s };
+}
+
+const scaleBox = (b: Box, k: number): Box => ({ x: b.x * k, y: b.y * k, width: b.width * k, height: b.height * k });
+
+/**
  * Detection of all faces for live tracking, with how face-on each one is. Uses the fast tiny
  * detector, and when it sees nothing, falls back to the slower but more robust SSD detector.
+ * Boxes are in video pixels.
  */
 export async function detectBoxes(input: HTMLVideoElement | HTMLCanvasElement): Promise<TrackedFace[]> {
   const faceapi = await loadFace();
+  const { canvas, back } = grabFrame(input, 640);
   let res = await faceapi
-    .detectAllFaces(input, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.3 }))
+    .detectAllFaces(canvas, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.3 }))
     .withFaceLandmarks();
   if (res.length === 0) {
-    res = await faceapi.detectAllFaces(input, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.4 })).withFaceLandmarks();
+    res = await faceapi.detectAllFaces(canvas, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.4 })).withFaceLandmarks();
   }
   return res.map((r) => {
     const b = r.detection.box;
-    return { x: b.x, y: b.y, width: b.width, height: b.height, frontal: frontalScore(r.landmarks.positions) };
+    return { ...scaleBox({ x: b.x, y: b.y, width: b.width, height: b.height }, back), frontal: frontalScore(r.landmarks.positions) };
   });
 }
 
-/** Accurate detection + 128-number face descriptors, with how face-on each face is. */
+/** Accurate detection + 128-number face descriptors, with how face-on each face is. Boxes in video pixels. */
 export async function describeFaces(input: HTMLVideoElement | HTMLCanvasElement) {
   const faceapi = await loadFace();
+  const { canvas, back } = grabFrame(input, 1280);
   const res = await faceapi
-    .detectAllFaces(input, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
+    .detectAllFaces(canvas, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
     .withFaceLandmarks()
     .withFaceDescriptors();
   return res.map((r) => ({
-    box: { x: r.detection.box.x, y: r.detection.box.y, width: r.detection.box.width, height: r.detection.box.height },
+    box: scaleBox({ x: r.detection.box.x, y: r.detection.box.y, width: r.detection.box.width, height: r.detection.box.height }, back),
     score: r.detection.score,
     frontal: frontalScore(r.landmarks.positions),
     descriptor: Array.from(r.descriptor),
@@ -117,14 +164,14 @@ export function meanDescriptor(list: number[][]) {
 
 /* ---------------- camera ---------------- */
 
-export async function startCamera(video: HTMLVideoElement, facing: "user" | "environment", hiRes = false) {
+export async function startCamera(video: HTMLVideoElement, facing: "user" | "environment") {
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new Error("Camera not available. Open this site over HTTPS in Safari or Chrome.");
   }
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: false,
-    // Catching uses a sharper stream: faces across a hall are small, and detail matters.
-    video: { facingMode: { ideal: facing }, width: { ideal: hiRes ? 1920 : 1280 }, height: { ideal: hiRes ? 1080 : 720 } },
+    // 720p: plenty for face fingerprints, and light enough for every phone to analyse smoothly.
+    video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 } },
   });
   video.srcObject = stream;
   video.setAttribute("playsinline", "true");

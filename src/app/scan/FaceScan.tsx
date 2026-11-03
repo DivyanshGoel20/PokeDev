@@ -46,12 +46,27 @@ export default function FaceScan({ isNew, hasFace, name }: { isNew: boolean; has
   async function scanLoop() {
     const video = videoRef.current!;
     const samples: number[][] = [];
+    let failures = 0;
     while (runningRef.current && samples.length < SAMPLES) {
-      const faces = await describeFaces(video).catch(() => []);
+      let faces: Awaited<ReturnType<typeof describeFaces>> = [];
+      try {
+        faces = await describeFaces(video);
+        failures = 0;
+      } catch (err) {
+        // Don't spin forever on a broken scanner: tell the person what happened.
+        console.warn("face scan failed", err);
+        if (++failures >= 12) {
+          runningRef.current = false;
+          stopCamera(streamRef.current);
+          setError("The face scanner stopped working on this phone. Reload the page and try again.");
+          setPhase("error");
+          return;
+        }
+      }
       if (!runningRef.current) return;
       const vw = video.videoWidth;
       const vh = video.videoHeight;
-      if (faces.length === 0) setHint("No face found. Look at the camera");
+      if (faces.length === 0) setHint("No face found. Hold the phone at eye level, in good light, and look at the screen");
       else if (faces.length > 1) setHint("Only your face in the frame, please");
       else {
         const f = faces[0];

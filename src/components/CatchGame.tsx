@@ -66,6 +66,7 @@ export default function CatchGame({
   const [modal, setModal] = useState<{ entry: DexEntry; fresh: boolean } | null>(null);
   const [notLive, setNotLive] = useState<{ token: string | null } | null>(null);
   const [facesFrontal, setFacesFrontal] = useState(0);
+  const [lonely, setLonely] = useState(false); // no face found for a while
   const [facesSeen, setFacesSeen] = useState(0);
   const [hintGone, setHintGone] = useState(false);
 
@@ -92,7 +93,7 @@ export default function CatchGame({
     (async () => {
       try {
         stopCamera(streamRef.current);
-        const [stream] = await Promise.all([startCamera(videoRef.current!, facing, true), loadFace()]);
+        const [stream] = await Promise.all([startCamera(videoRef.current!, facing), loadFace()]);
         if (cancelled) return stopCamera(stream);
         streamRef.current = stream;
         g.current.mirrored = facing === "user";
@@ -116,13 +117,27 @@ export default function CatchGame({
   useEffect(() => {
     if (status !== "ready") return;
     let alive = true;
-    let lastSeen = 0;
+    let lastSeen = performance.now();
+    let failures = 0;
     (async () => {
       while (alive) {
         const v = videoRef.current;
         if (g.current.tracking && v && v.readyState >= 2) {
-          const boxes = await detectBoxes(v).catch(() => [] as TrackedFace[]);
+          let boxes: TrackedFace[] = [];
+          try {
+            boxes = await detectBoxes(v);
+            failures = 0;
+          } catch (err) {
+            // Never fail silently: if the scanner keeps erroring, say so instead of "searching" forever.
+            console.warn("face tracking failed", err);
+            if (++failures >= 12) {
+              setError("The face scanner stopped working on this phone. Reload the app and try again.");
+              setStatus("error");
+              break;
+            }
+          }
           if (!alive) break;
+          setLonely(performance.now() - lastSeen > 7000);
           // Hold the last seen faces briefly so the target doesn't flicker on a missed frame.
           const now = performance.now();
           if (boxes.length || now - lastSeen > 600) {
@@ -794,7 +809,7 @@ export default function CatchGame({
       </div>
 
       {/* hint / messages */}
-      {status === "ready" && (toast || !hintGone || (facesSeen > 0 && facesFrontal === 0)) && !modal && !notLive && (
+      {status === "ready" && (toast || !hintGone || lonely || (facesSeen > 0 && facesFrontal === 0)) && !modal && !notLive && (
         <div
           style={{
             position: "absolute",
@@ -812,7 +827,9 @@ export default function CatchGame({
                 ? "They're side-on! Builders can only be caught face to face. Get them to look at you."
                 : facesSeen
                   ? "A builder appeared! Swipe the DevBall at them, or tap their face."
-                  : "Point your camera at another player...")}
+                  : lonely
+                    ? "Can't find a face. Point the camera at someone 1-2 m away, in good light, with their whole face in view."
+                    : "Point your camera at another player...")}
           </div>
         </div>
       )}
