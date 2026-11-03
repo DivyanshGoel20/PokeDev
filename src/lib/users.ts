@@ -1,15 +1,10 @@
 import "server-only";
 import { q } from "./db";
-import { TYPE_KEYS, type DevType, type PublicUser } from "./types";
+import { TYPE_KEYS, type AppState, type DevType, type DexEntry, type RankRow } from "./types";
 
-const SELECT_PUBLIC = `
-  SELECT u.id, u.username, u.display_name, u.building, u.type, u.x_handle, u.farcaster, u.telegram,
-    (SELECT count(*) FROM catches c WHERE c.caught_id = u.id)::int AS caught_count,
-    (SELECT count(*) FROM catches c WHERE c.catcher_id = u.id)::int AS catch_count
-  FROM users u`;
-
-type Raw = {
+type DexRaw = {
   id: number;
+  no: number;
   username: string;
   display_name: string;
   building: string;
@@ -17,52 +12,87 @@ type Raw = {
   x_handle: string;
   farcaster: string;
   telegram: string;
-  caught_count: number;
+  catchable: boolean;
+  caught_at: string | null;
+  has_photo: boolean;
   catch_count: number;
+  caught_count: number;
 };
 
-export function toPublic(r: Raw): PublicUser {
-  return {
+/** Everything the app needs, in one round of queries. */
+export async function buildState(meId: number): Promise<AppState | null> {
+  const [dexRows, rankRows] = await Promise.all([
+    q<DexRaw>(
+      `SELECT u.id, u.username, u.display_name, u.building, u.type, u.x_handle, u.farcaster, u.telegram, u.catchable,
+         row_number() OVER (ORDER BY u.id)::int AS no,
+         c.created_at AS caught_at, (c.photo IS NOT NULL) AS has_photo,
+         (SELECT count(*) FROM catches x WHERE x.catcher_id = u.id)::int AS catch_count,
+         (SELECT count(*) FROM catches x WHERE x.caught_id = u.id)::int AS caught_count
+       FROM users u
+       LEFT JOIN catches c ON c.caught_id = u.id AND c.catcher_id = $1
+       WHERE u.face IS NOT NULL OR u.id = $1
+       ORDER BY u.id`,
+      [meId],
+    ),
+    q<{ id: number; username: string; display_name: string; type: string; catches: number }>(
+      `SELECT u.id, u.username, u.display_name, u.type, count(c.caught_id)::int AS catches
+       FROM users u LEFT JOIN catches c ON c.catcher_id = u.id
+       WHERE u.face IS NOT NULL
+       GROUP BY u.id ORDER BY catches DESC, u.id ASC LIMIT 100`,
+    ),
+  ]);
+
+  const meRow = dexRows.find((r) => r.id === meId);
+  if (!meRow) return null;
+
+  const dex: DexEntry[] = dexRows.map((r) => {
+    const isMe = r.id === meId;
+    const caught = !!r.caught_at;
+    const base: DexEntry = { no: r.no, type: r.type as DevType, isMe, caught };
+    if (!isMe && !caught) return base; // unknown entry: number + type only
+    return {
+      ...base,
+      username: r.username,
+      displayName: r.display_name,
+      building: r.building,
+      xHandle: r.x_handle,
+      farcaster: r.farcaster,
+      telegram: r.telegram,
+      caughtAt: r.caught_at ? new Date(r.caught_at).toISOString() : undefined,
+      hasPhoto: r.has_photo,
+      catchCount: Number(r.catch_count),
+      caughtCount: Number(r.caught_count),
+    };
+  });
+
+  const ranks: RankRow[] = rankRows.map((r) => ({
     username: r.username,
     displayName: r.display_name,
-    building: r.building,
     type: r.type as DevType,
-    xHandle: r.x_handle,
-    farcaster: r.farcaster,
-    telegram: r.telegram,
-    number: r.id,
-    caughtCount: Number(r.caught_count),
-    catchCount: Number(r.catch_count),
+    catches: Number(r.catches),
+    isMe: r.id === meId,
+  }));
+  const myCatches = Number(meRow.catch_count);
+  const rank = 1 + ranks.filter((r) => r.catches > myCatches).length;
+
+  return {
+    me: {
+      no: meRow.no,
+      username: meRow.username,
+      displayName: meRow.display_name,
+      building: meRow.building,
+      type: meRow.type as DevType,
+      xHandle: meRow.x_handle,
+      farcaster: meRow.farcaster,
+      telegram: meRow.telegram,
+      catchable: meRow.catchable,
+      catchCount: myCatches,
+      caughtCount: Number(meRow.caught_count),
+      rank,
+    },
+    dex,
+    ranks,
   };
-}
-
-export async function publicUserById(id: number) {
-  const rows = await q<Raw>(`${SELECT_PUBLIC} WHERE u.id = $1`, [id]);
-  return rows[0] ? toPublic(rows[0]) : null;
-}
-
-export async function publicUserByUsername(username: string) {
-  const rows = await q<Raw>(`${SELECT_PUBLIC} WHERE u.username = $1`, [username.toLowerCase()]);
-  return rows[0] ? { id: rows[0].id, user: toPublic(rows[0]) } : null;
-}
-
-export async function collection(catcherId: number) {
-  const rows = await q<Raw & { caught_at: string }>(
-    `SELECT * FROM (${SELECT_PUBLIC}) u2
-     JOIN (SELECT caught_id, created_at AS caught_at FROM catches WHERE catcher_id = $1) c
-       ON c.caught_id = u2.id
-     ORDER BY c.caught_at DESC`,
-    [catcherId],
-  );
-  return rows.map((r) => ({ ...toPublic(r), caughtAt: new Date(r.caught_at).toISOString() }));
-}
-
-export async function leaderboard(limit = 50) {
-  const rows = await q<Raw>(
-    `SELECT * FROM (${SELECT_PUBLIC} WHERE u.face IS NOT NULL) u2 ORDER BY catch_count DESC, caught_count DESC, id ASC LIMIT $1`,
-    [limit],
-  );
-  return rows.map(toPublic);
 }
 
 /* ---------- input validation ---------- */
@@ -88,6 +118,14 @@ export function cleanDescriptor(v: unknown): number[] | null {
   return out.every((n) => Number.isFinite(n) && Math.abs(n) < 10) ? out : null;
 }
 
+/** A small JPEG data URL (the catch snapshot). Returns the base64 payload or null. */
+export function cleanPhoto(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(v);
+  if (!m || m[1].length > 400_000) return null;
+  return m[1];
+}
+
 export function profileFields(body: Record<string, unknown>) {
   return {
     displayName: cleanText(body.displayName, 40),
@@ -101,14 +139,14 @@ export function profileFields(body: Record<string, unknown>) {
 
 /** Nearest registered faces to a descriptor, by euclidean distance. */
 export async function nearestFaces(descriptor: number[], limit = 2) {
-  return q<{ id: number; catchable: boolean; dist: number }>(
+  return q<{ id: number; username: string; catchable: boolean; dist: number }>(
     `WITH qv AS (SELECT x, i FROM unnest($1::float8[]) WITH ORDINALITY AS t(x, i))
-     SELECT u.id, u.catchable, sqrt(sum((f.x - qv.x) ^ 2)) AS dist
+     SELECT u.id, u.username, u.catchable, sqrt(sum((f.x - qv.x) ^ 2)) AS dist
      FROM users u
      CROSS JOIN LATERAL unnest(u.face) WITH ORDINALITY AS f(x, i)
      JOIN qv ON qv.i = f.i
      WHERE u.face IS NOT NULL
-     GROUP BY u.id, u.catchable
+     GROUP BY u.id, u.username, u.catchable
      ORDER BY dist ASC
      LIMIT $2`,
     [descriptor, limit],

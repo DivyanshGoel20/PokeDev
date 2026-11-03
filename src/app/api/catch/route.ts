@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { q } from "@/lib/db";
 import { getUser } from "@/lib/auth";
-import { cleanDescriptor, nearestFaces, publicUserById } from "@/lib/users";
+import { cleanDescriptor, cleanPhoto, nearestFaces } from "@/lib/users";
 import { MATCH_MARGIN, MATCH_THRESHOLD } from "@/lib/types";
 
 /**
  * Match a face seen through the camera against registered players.
- * The descriptor is compared and then discarded: nothing about unmatched faces is stored.
+ * The descriptor and snapshot are only kept when they match a registered, catchable player;
+ * anything else is discarded.
  */
 export async function POST(req: Request) {
   const me = await getUser();
@@ -16,6 +17,7 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   const descriptor = cleanDescriptor(body.descriptor);
   if (!descriptor) return NextResponse.json({ error: "Bad face data" }, { status: 400 });
+  const photo = cleanPhoto(body.photo);
 
   const [best, runnerUp] = await nearestFaces(descriptor, 2);
   if (!best || Number(best.dist) > MATCH_THRESHOLD) return NextResponse.json({ result: "nomatch" });
@@ -25,10 +27,11 @@ export async function POST(req: Request) {
   if (!best.catchable) return NextResponse.json({ result: "hidden" });
 
   const inserted = await q(
-    `INSERT INTO catches (catcher_id, caught_id) VALUES ($1, $2)
-     ON CONFLICT DO NOTHING RETURNING caught_id`,
-    [me.id, best.id],
+    `INSERT INTO catches (catcher_id, caught_id, photo) VALUES ($1, $2, $3)
+     ON CONFLICT (catcher_id, caught_id) DO UPDATE SET photo = COALESCE(catches.photo, EXCLUDED.photo)
+     RETURNING (xmax = 0) AS fresh`,
+    [me.id, best.id, photo],
   );
-  const user = await publicUserById(best.id);
-  return NextResponse.json({ result: inserted.length ? "caught" : "already", user });
+  const fresh = (inserted[0] as { fresh?: boolean } | undefined)?.fresh;
+  return NextResponse.json({ result: fresh ? "caught" : "already", username: best.username });
 }

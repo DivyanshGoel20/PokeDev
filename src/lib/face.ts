@@ -23,6 +23,21 @@ export function loadFace(): Promise<FaceApi> {
         faceapi.nets.faceLandmark68Net.loadFromUri("/models"),
         faceapi.nets.faceRecognitionNet.loadFromUri("/models"),
       ]);
+      // Warm-up: the first run of each network compiles GPU shaders (can take seconds on phones).
+      // Doing it now, on a blank canvas, means the first real catch is instant.
+      try {
+        const c = document.createElement("canvas");
+        c.width = c.height = 160;
+        const ctx = c.getContext("2d")!;
+        ctx.fillStyle = "#888";
+        ctx.fillRect(0, 0, 160, 160);
+        await faceapi.detectAllFaces(c, new faceapi.TinyFaceDetectorOptions({ inputSize: 416 }));
+        await faceapi.detectAllFaces(c, new faceapi.SsdMobilenetv1Options());
+        await faceapi.detectFaceLandmarks(c);
+        await faceapi.computeFaceDescriptor(c);
+      } catch {
+        /* warm-up is best effort */
+      }
       return faceapi;
     })().catch((e) => {
       loading = null;

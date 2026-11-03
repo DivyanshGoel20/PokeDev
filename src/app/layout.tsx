@@ -1,14 +1,17 @@
 import type { Metadata, Viewport } from "next";
-import { Bricolage_Grotesque, Inter, JetBrains_Mono } from "next/font/google";
+import "@fontsource/press-start-2p/latin-400.css";
+import "@fontsource/rubik/latin-400.css";
+import "@fontsource/rubik/latin-500.css";
+import "@fontsource/rubik/latin-600.css";
+import "@fontsource/rubik/latin-700.css";
 import "./globals.css";
 
-const display = Bricolage_Grotesque({ variable: "--font-display", subsets: ["latin"], weight: ["600", "800"] });
-const body = Inter({ variable: "--font-body", subsets: ["latin"] });
-const mono = JetBrains_Mono({ variable: "--font-mono", subsets: ["latin"], weight: ["500", "700"] });
-
 export const metadata: Metadata = {
-  title: "PokeDev — catch every builder at Devcon",
-  description: "Meet people at Devcon, throw a DevBall, catch them and collect their builder card.",
+  title: "PokeDev",
+  description: "Catch every builder at Devcon. Meet someone, throw a DevBall, add them to your PokeDev.",
+  applicationName: "PokeDev",
+  appleWebApp: { capable: true, title: "PokeDev", statusBarStyle: "black-translucent" },
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
@@ -16,14 +19,14 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#07060f",
+  themeColor: "#dc2b2b",
   viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className={`${display.variable} ${body.variable} ${mono.variable}`}>{children}</body>
+      <body>{children}</body>
     </html>
   );
 }

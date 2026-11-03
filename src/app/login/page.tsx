@@ -1,8 +1,8 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { DevBall } from "@/components/DevBall";
 import { postJSON } from "@/lib/client";
+import { Lid } from "@/components/ui";
 
 export default function Login() {
   const [username, setUsername] = useState("");
@@ -24,49 +24,43 @@ export default function Login() {
   }
 
   return (
-    <main className="page no-nav">
-      <Link href="/" className="small muted">
-        ← Back
-      </Link>
-      <div className="center" style={{ margin: "28px 0" }}>
-        <DevBall size={72} className="float" />
-        <h1 className="title" style={{ marginTop: 16 }}>
-          Welcome back
-        </h1>
-        <p className="subtitle">Your PokeDev is waiting.</p>
-      </div>
-      <form onSubmit={submit} className="fade-up">
-        {error && <div className="error">{error}</div>}
-        <div className="field">
-          <label>Username</label>
-          <input
-            className="input"
-            autoCapitalize="none"
-            autoComplete="username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-          />
+    <>
+      <Lid title="CONTINUE" subtitle="Welcome back, trainer" backHref="/" big={false} />
+      <main className="wrap plain screen">
+        <div className="dialog" style={{ marginBottom: 22 }}>
+          Welcome back! Enter your trainer name and passcode to continue your adventure.
         </div>
-        <div className="field">
-          <label>Passcode</label>
-          <input
-            className="input"
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </div>
-        <button className="btn btn-primary" disabled={busy || !username || !password} style={{ marginTop: 8 }}>
-          {busy ? "Logging in…" : "Log in"}
-        </button>
-      </form>
-      <p className="center small muted" style={{ marginTop: 20 }}>
-        New here?{" "}
-        <Link href="/join" style={{ color: "var(--accent2)" }}>
-          Join the hunt
-        </Link>
-      </p>
-    </main>
+        <form onSubmit={submit}>
+          {error && <div className="error">{error}</div>}
+          <div className="field">
+            <label>Username</label>
+            <div className="input-icon">
+              <span>@</span>
+              <input
+                className="input"
+                autoCapitalize="none"
+                autoCorrect="off"
+                autoComplete="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value.toLowerCase())}
+              />
+            </div>
+          </div>
+          <div className="field">
+            <label>Passcode</label>
+            <input className="input" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          </div>
+          <button className="btn btn-red" disabled={busy || !username || !password} style={{ marginTop: 10 }}>
+            {busy ? "Loading..." : "Continue"}
+          </button>
+        </form>
+        <p className="center small muted" style={{ marginTop: 22 }}>
+          New here?{" "}
+          <Link href="/join" style={{ color: "var(--red)", fontWeight: 700 }}>
+            Become a trainer
+          </Link>
+        </p>
+      </main>
+    </>
   );
 }

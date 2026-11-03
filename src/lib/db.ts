@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS catches (
   PRIMARY KEY (catcher_id, caught_id)
 );
 CREATE INDEX IF NOT EXISTS catches_caught_idx ON catches(caught_id);
+ALTER TABLE catches ADD COLUMN IF NOT EXISTS photo TEXT;
 `;
 
 declare global {

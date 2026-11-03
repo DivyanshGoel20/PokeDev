@@ -1,9 +1,9 @@
 "use client";
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { cameraErrorMessage, describeFaces, distance, loadFace, meanDescriptor, startCamera, stopCamera } from "@/lib/face";
 import { postJSON } from "@/lib/client";
 import { DevBall } from "@/components/DevBall";
+import { Lid } from "@/components/ui";
 
 const SAMPLES = 5;
 type Phase = "intro" | "loading" | "scanning" | "saving" | "done" | "error";
@@ -18,7 +18,7 @@ export default function FaceScan({ isNew, hasFace, name }: { isNew: boolean; has
   const runningRef = useRef(false);
 
   useEffect(() => {
-    loadFace().catch(() => {}); // warm up models while the user reads the intro
+    loadFace().catch(() => {}); // download + warm up models while the user reads the intro
     return () => {
       runningRef.current = false;
       stopCamera(streamRef.current);
@@ -50,23 +50,23 @@ export default function FaceScan({ isNew, hasFace, name }: { isNew: boolean; has
       if (!runningRef.current) return;
       const vw = video.videoWidth;
       const vh = video.videoHeight;
-      if (faces.length === 0) setHint("No face found — look at the camera");
-      else if (faces.length > 1) setHint("Only your face in the frame please");
+      if (faces.length === 0) setHint("No face found. Look at the camera");
+      else if (faces.length > 1) setHint("Only your face in the frame, please");
       else {
         const f = faces[0];
         const cx = (f.box.x + f.box.width / 2) / vw;
         const cy = (f.box.y + f.box.height / 2) / vh;
-        if (f.box.width < Math.min(vw, vh) * 0.28) setHint("Move a bit closer");
-        else if (Math.abs(cx - 0.5) > 0.2 || Math.abs(cy - 0.5) > 0.22) setHint("Center your face in the oval");
-        else if (f.score < 0.8) setHint("Hold still, good light helps");
+        if (f.box.width < Math.min(vw, vh) * 0.28) setHint("Move a little closer");
+        else if (Math.abs(cx - 0.5) > 0.2 || Math.abs(cy - 0.5) > 0.22) setHint("Center your face in the circle");
+        else if (f.score < 0.8) setHint("Hold still. Good light helps");
         else {
           if (samples.length && distance(meanDescriptor(samples), f.descriptor) > 0.45) samples.length = 0;
           samples.push(f.descriptor);
           setProgress(samples.length / SAMPLES);
-          setHint(samples.length < SAMPLES ? "Perfect, hold still…" : "Got it!");
+          setHint(samples.length < SAMPLES ? "Perfect, hold still..." : "Got it!");
         }
       }
-      await new Promise((r) => setTimeout(r, 120));
+      await new Promise((r) => setTimeout(r, 80));
     }
     if (!runningRef.current) return;
     runningRef.current = false;
@@ -84,144 +84,148 @@ export default function FaceScan({ isNew, hasFace, name }: { isNew: boolean; has
   const live = phase === "loading" || phase === "scanning";
 
   return (
-    <main className="page no-nav" style={{ minHeight: "100dvh" }}>
-      {!isNew && (
-        <Link href={hasFace ? "/me" : "/"} className="small muted">
-          ← Back
-        </Link>
+    <>
+      {isNew ? (
+        <Lid title="NEW TRAINER" subtitle="Step 3 of 3" big={false} />
+      ) : (
+        <Lid title="FACE SCAN" subtitle="Update your fingerprint" backHref={hasFace ? "/#me" : "/"} big={false} />
       )}
-
-      {isNew && (
-        <div className="steps">
-          <i data-on="true" />
-          <i data-on="true" />
-          <i data-on="true" />
-        </div>
-      )}
-
-      <div style={{ display: live ? "block" : "none" }}>
-        <div
-          style={{
-            position: "relative",
-            width: "100%",
-            aspectRatio: "3 / 4",
-            borderRadius: 28,
-            overflow: "hidden",
-            background: "#000",
-            marginTop: 16,
-          }}
-        >
-          <video
-            ref={videoRef}
-            playsInline
-            muted
-            style={{ width: "100%", height: "100%", objectFit: "cover", transform: "scaleX(-1)" }}
-          />
-          <div
-            style={{
-              position: "absolute",
-              left: "50%",
-              top: "48%",
-              width: "66%",
-              height: "62%",
-              transform: "translate(-50%,-50%)",
-              borderRadius: "50%",
-              boxShadow: "0 0 0 9999px rgba(7,6,15,.72)",
-            }}
-          />
-          <svg
-            viewBox="0 0 300 300"
-            preserveAspectRatio="none"
-            style={{ position: "absolute", left: "17%", top: "17%", width: "66%", height: "62%" }}
-          >
-            <ellipse cx="150" cy="150" rx="146" ry="146" fill="none" stroke="rgba(255,255,255,.2)" strokeWidth="3" vectorEffect="non-scaling-stroke" />
-            <ellipse
-              cx="150"
-              cy="150"
-              rx="146"
-              ry="146"
-              fill="none"
-              stroke="url(#ringg)"
-              strokeWidth="6"
-              strokeLinecap="round"
-              vectorEffect="non-scaling-stroke"
-              pathLength={100}
-              strokeDasharray={`${progress * 100} 100`}
-              transform="rotate(-90 150 150)"
-              style={{ transition: "stroke-dasharray .3s" }}
-            />
-            <defs>
-              <linearGradient id="ringg" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" stopColor="#8b5cf6" />
-                <stop offset="1" stopColor="#22d3ee" />
-              </linearGradient>
-            </defs>
-          </svg>
-          <div style={{ position: "absolute", left: 0, right: 0, bottom: 20, textAlign: "center", padding: "0 16px" }}>
-            <span className="social" style={{ background: "rgba(0,0,0,.6)", fontSize: 15 }}>
-              {phase === "loading" ? "Starting camera…" : hint}
-            </span>
+      <main className="wrap plain">
+        {isNew && (
+          <div className="steps">
+            <i data-on="true" />
+            <i data-on="true" />
+            <i data-on="true" />
           </div>
-        </div>
-        <p className="center small muted" style={{ marginTop: 14 }}>
-          Nothing is recorded. Your face is turned into 128 numbers on this phone, and only those numbers are saved.
-        </p>
-      </div>
+        )}
 
-      {phase === "intro" && (
-        <div className="fade-up" style={{ marginTop: 20 }}>
-          <div className="center">
-            <div style={{ fontSize: 72 }}>🤳</div>
-            <h1 className="title" style={{ marginTop: 10 }}>
-              {isNew ? `Last step, ${name.split(" ")[0]}` : "Scan your face"}
-            </h1>
-            <p className="subtitle">
-              This is how other players catch you. Hold your phone at eye level in good light — it takes about 3 seconds.
+        <div style={{ display: live ? "block" : "none" }}>
+          <div className="bezel">
+            <div
+              style={{
+                position: "relative",
+                width: "100%",
+                aspectRatio: "3 / 4",
+                borderRadius: 8,
+                overflow: "hidden",
+                background: "#000",
+              }}
+            >
+              <video ref={videoRef} playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover", transform: "scaleX(-1)" }} />
+              <div
+                style={{
+                  position: "absolute",
+                  left: "50%",
+                  top: "47%",
+                  width: "70%",
+                  aspectRatio: "1 / 1.22",
+                  transform: "translate(-50%,-50%)",
+                  borderRadius: "50%",
+                  boxShadow: "0 0 0 9999px rgba(29,29,34,.62)",
+                }}
+              />
+              <svg
+                viewBox="0 0 100 122"
+                style={{ position: "absolute", left: "50%", top: "47%", width: "70%", transform: "translate(-50%,-50%)", overflow: "visible" }}
+              >
+                <ellipse cx="50" cy="61" rx="50" ry="61" fill="none" stroke="rgba(255,255,255,.35)" strokeWidth="2" />
+                <ellipse
+                  cx="50"
+                  cy="61"
+                  rx="50"
+                  ry="61"
+                  fill="none"
+                  stroke="#4cc76b"
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                  pathLength={100}
+                  strokeDasharray={`${progress * 100} 100`}
+                  transform="rotate(-90 50 61)"
+                  style={{ transition: "stroke-dasharray .25s" }}
+                />
+              </svg>
+              {phase === "loading" && (
+                <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
+                  <DevBall size={56} className="bob" />
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="dialog" style={{ marginTop: 14, fontSize: 16 }}>
+            {phase === "loading" ? "Booting scanner..." : hint}
+          </div>
+          <p className="center small muted" style={{ marginTop: 12 }}>
+            Nothing is recorded. Your face becomes 128 numbers on this phone, and only those are saved.
+          </p>
+        </div>
+
+        {phase === "intro" && (
+          <div className="screen">
+            <div className="dialog">
+              {isNew
+                ? `Last step, ${name.split(" ")[0]}! Let's scan your face so other trainers can catch you.`
+                : "Let's rescan your face. Use good light and hold your phone at eye level."}
+            </div>
+            <div className="panel" style={{ marginTop: 14 }}>
+              <ul className="list-plain">
+                <li>
+                  <span className="num-dot">1</span>Hold your phone at eye level, in good light.
+                </li>
+                <li>
+                  <span className="num-dot">2</span>Fit your face in the circle and hold still for about 3 seconds.
+                </li>
+                <li>
+                  <span className="num-dot">3</span>No photo is stored, just a 128-number fingerprint you can delete anytime.
+                </li>
+              </ul>
+            </div>
+            <button className="btn btn-red" style={{ marginTop: 18 }} onClick={begin}>
+              Start face scan
+            </button>
+          </div>
+        )}
+
+        {phase === "saving" && (
+          <div className="center" style={{ marginTop: 70 }}>
+            <DevBall size={84} className="bob" />
+            <p className="px" style={{ fontSize: 10, marginTop: 22 }}>
+              SAVING...
             </p>
           </div>
-          <div className="panel" style={{ marginTop: 24 }}>
-            <ul className="list-check">
-              <li>🔒 No photo or video is ever uploaded or stored.</li>
-              <li>🔢 We save a face fingerprint: 128 numbers that can&apos;t be turned back into a picture.</li>
-              <li>🗑️ Delete it any time from your profile.</li>
-            </ul>
+        )}
+
+        {phase === "error" && (
+          <div className="screen" style={{ marginTop: 10 }}>
+            <div className="error">{error}</div>
+            <button className="btn btn-red" onClick={begin}>
+              Try again
+            </button>
           </div>
-          <button className="btn btn-primary" style={{ marginTop: 20 }} onClick={begin}>
-            Start face scan
-          </button>
-        </div>
-      )}
+        )}
 
-      {phase === "saving" && (
-        <div className="center" style={{ marginTop: 80 }}>
-          <DevBall size={90} className="float" />
-          <p className="subtitle">Saving your fingerprint…</p>
-        </div>
-      )}
-
-      {phase === "error" && (
-        <div className="fade-up" style={{ marginTop: 40 }}>
-          <div className="error">{error}</div>
-          <button className="btn btn-primary" onClick={begin}>
-            Try again
-          </button>
-        </div>
-      )}
-
-      {phase === "done" && (
-        <div className="center fade-up" style={{ marginTop: 50 }}>
-          <div className="float" style={{ display: "inline-block", filter: "drop-shadow(0 20px 40px rgba(139,92,246,.6))" }}>
-            <DevBall size={120} />
+        {phase === "done" && (
+          <div className="center screen" style={{ marginTop: 20 }}>
+            <div className="bezel">
+              <div className="lcd" style={{ padding: "30px 16px" }}>
+                <DevBall size={96} className="pop" />
+                <div className="px" style={{ fontSize: 14, marginTop: 22, lineHeight: 1.5 }}>
+                  {isNew ? "REGISTERED!" : "UPDATED!"}
+                </div>
+              </div>
+            </div>
+            <div className="dialog" style={{ marginTop: 14, textAlign: "left" }}>
+              {isNew
+                ? "Your journey begins! Find other builders and throw a DevBall at them."
+                : "Your face fingerprint was updated."}
+            </div>
+            {/* full page load on purpose: the home page needs fresh server state */}
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+            <a href="/" className="btn btn-red" style={{ marginTop: 18 }}>
+              {isNew ? "Let's go!" : "Back to PokeDev"}
+            </a>
           </div>
-          <h1 className="title" style={{ marginTop: 24 }}>
-            {isNew ? "You're in the game!" : "Face updated"}
-          </h1>
-          <p className="subtitle">Now find other builders and throw a DevBall at them.</p>
-          <Link href="/play" className="btn btn-primary" style={{ marginTop: 28 }}>
-            Start catching
-          </Link>
-        </div>
-      )}
-    </main>
+        )}
+      </main>
+    </>
   );
 }
