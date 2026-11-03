@@ -979,8 +979,18 @@ function CaughtModal({ entry, fresh, onContinue, onOpen }: { entry: DexEntry; fr
   );
 }
 
+const INVITE_MS = 30 * 60 * 1000;
+
 function NotLiveModal({ token, inviter, onContinue }: { token: string | null; inviter: string; onContinue: () => void }) {
   const [svg, setSvg] = useState("");
+  const [expires] = useState(() => Date.now() + INVITE_MS);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  const left = Math.max(0, expires - now);
+  const mmss = `${Math.floor(left / 60000)}:${String(Math.floor((left % 60000) / 1000)).padStart(2, "0")}`;
   const url = typeof window === "undefined" ? "" : `${window.location.origin}/join?${token ? `invite=${token}` : `ref=${inviter}`}`;
   useEffect(() => {
     QRCode.toString(url, { type: "svg", margin: 1, errorCorrectionLevel: "M", color: { dark: "#1d1d22", light: "#ffffff" } })
@@ -1023,9 +1033,38 @@ function NotLiveModal({ token, inviter, onContinue }: { token: string | null; in
           }}
         >
           <div className="qr" style={{ width: "100%", aspectRatio: "1 / 1" }} dangerouslySetInnerHTML={{ __html: svg }} />
-          <div className="px center muted" style={{ fontSize: 8, marginTop: 10, lineHeight: 1.6 }}>
-            {token ? "ONE-TIME INVITE · VALID 6 HOURS" : "INVITE LINK"}
-          </div>
+          {token ? (
+            <div
+              className="row px"
+              style={{
+                justifyContent: "center",
+                gap: 8,
+                marginTop: 12,
+                fontSize: 9,
+                lineHeight: 1.6,
+                color: left ? "var(--ink)" : "var(--danger)",
+              }}
+            >
+              <span>{left ? "EXPIRES IN" : "EXPIRED"}</span>
+              {left > 0 && (
+                <span
+                  style={{
+                    background: left < 5 * 60 * 1000 ? "var(--danger)" : "var(--red)",
+                    color: "#fff",
+                    borderRadius: 6,
+                    padding: "4px 7px",
+                    fontSize: 11,
+                  }}
+                >
+                  {mmss}
+                </span>
+              )}
+            </div>
+          ) : (
+            <div className="px center muted" style={{ fontSize: 8, marginTop: 10, lineHeight: 1.6 }}>
+              INVITE LINK
+            </div>
+          )}
         </div>
         <button className="btn btn-red" style={{ marginTop: 16 }} onClick={onContinue}>
           Done, keep catching

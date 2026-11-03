@@ -24,7 +24,7 @@ export async function GET(req: Request) {
   if (!/^[a-z0-9]{12,40}$/.test(token)) return NextResponse.json({ valid: false });
   const rows = await q<{ display_name: string; username: string }>(
     `SELECT u.display_name, u.username FROM invites i JOIN users u ON u.id = i.catcher_id
-     WHERE i.token = $1 AND i.used_by IS NULL AND i.created_at > now() - interval '6 hours'`,
+     WHERE i.token = $1 AND i.used_by IS NULL AND i.created_at > now() - interval '30 minutes'`,
     [token],
   );
   return rows[0]

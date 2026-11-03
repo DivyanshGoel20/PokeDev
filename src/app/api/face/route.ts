@@ -24,7 +24,7 @@ export async function POST(req: Request) {
 
   await q("UPDATE users SET face = $1::float8[] WHERE id = $2", [descriptor, me.id]);
 
-  // Joined from someone's "onboard them now" QR? Their catch counts now (one-time, 6-hour invite).
+  // Joined from someone's "onboard them now" QR? Their catch counts now (one-time, 30-minute invite).
   const [{ invite_token: token } = { invite_token: null }] = await q<{ invite_token: string | null }>(
     "UPDATE users SET invite_token = NULL WHERE id = $1 RETURNING (SELECT invite_token FROM users WHERE id = $1)",
     [me.id],
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
   if (token) {
     const used = await q<{ catcher_id: number }>(
       `UPDATE invites SET used_by = $2
-       WHERE token = $1 AND used_by IS NULL AND catcher_id <> $2 AND created_at > now() - interval '6 hours'
+       WHERE token = $1 AND used_by IS NULL AND catcher_id <> $2 AND created_at > now() - interval '30 minutes'
        RETURNING catcher_id`,
       [token, me.id],
     );
