@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { q } from "@/lib/db";
 import { getUser } from "@/lib/auth";
 import { cleanDescriptor, nearestFaces, publicUserById } from "@/lib/users";
-import { MATCH_THRESHOLD } from "@/lib/types";
+import { MATCH_MARGIN, MATCH_THRESHOLD } from "@/lib/types";
 
 /**
  * Match a face seen through the camera against registered players.
@@ -17,8 +17,10 @@ export async function POST(req: Request) {
   const descriptor = cleanDescriptor(body.descriptor);
   if (!descriptor) return NextResponse.json({ error: "Bad face data" }, { status: 400 });
 
-  const [best] = await nearestFaces(descriptor, 1);
+  const [best, runnerUp] = await nearestFaces(descriptor, 2);
   if (!best || Number(best.dist) > MATCH_THRESHOLD) return NextResponse.json({ result: "nomatch" });
+  // Two players look almost equally similar: don't guess, ask for a closer look.
+  if (runnerUp && Number(runnerUp.dist) - Number(best.dist) < MATCH_MARGIN) return NextResponse.json({ result: "unclear" });
   if (best.id === me.id) return NextResponse.json({ result: "self" });
   if (!best.catchable) return NextResponse.json({ result: "hidden" });
 

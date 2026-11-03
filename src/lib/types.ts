@@ -29,4 +29,6 @@ export type PublicUser = {
 };
 
 /** Max euclidean distance between face descriptors to count as the same person. */
-export const MATCH_THRESHOLD = 0.5;
+export const MATCH_THRESHOLD = 0.45;
+/** If the runner-up is this close to the best match, the result is ambiguous and rejected. */
+export const MATCH_MARGIN = 0.06;

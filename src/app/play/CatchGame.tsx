@@ -108,14 +108,31 @@ export default function CatchGame({ initialCount }: { initialCount: number }) {
   useEffect(() => {
     if (status !== "ready") return;
     let alive = true;
+    let lastSeen = 0;
     (async () => {
       while (alive) {
         const v = videoRef.current;
         if (g.current.tracking && v && v.readyState >= 2) {
-          const boxes = await detectBoxes(v).catch(() => [] as Box[]);
+          const boxes = await detectBoxes(v).catch((e) => {
+            console.warn("face tracking failed", e);
+            return [] as Box[];
+          });
           if (!alive) break;
-          g.current.boxes = boxes;
-          setFacesSeen(boxes.length);
+          // Hold the last seen faces briefly so the reticle doesn't flicker on a missed frame.
+          const now = performance.now();
+          if (boxes.length || now - lastSeen > 600) {
+            g.current.boxes = boxes;
+            setFacesSeen(boxes.length);
+            const c = canvasRef.current;
+            if (c && v.videoWidth) {
+              // expose on-screen face centers (used by automated tests)
+              const m = coverMap(v.videoWidth, v.videoHeight, window.innerWidth, window.innerHeight, g.current.mirrored);
+              c.dataset.faces = JSON.stringify(
+                boxes.map(m.toScreen).map((b) => [Math.round(b.x + b.width / 2), Math.round(b.y + b.height / 2)]),
+              );
+            }
+          }
+          if (boxes.length) lastSeen = now;
         }
         await new Promise((r) => setTimeout(r, 90));
       }
@@ -235,11 +252,20 @@ export default function CatchGame({ initialCount }: { initialCount: number }) {
       const vx = (e.clientX - p0.x) / dt;
       const vy = (e.clientY - p0.y) / dt;
       const speed = Math.hypot(vx, vy);
-      if (vy > -0.35 || speed < 0.45) {
-        S.ball = { k: "idle", t0: now }; // not a throw, snap back
+      if (vy < -0.35 && speed > 0.45) {
+        throwBall(e.clientX, e.clientY, vx / speed, vy / speed, speed, now);
         return;
       }
-      throwBall(e.clientX, e.clientY, vx / speed, vy / speed, speed, now);
+      // Slow but long upward drag also counts as a throw (helps on laggy phones).
+      const start = rest();
+      const dx = e.clientX - start.x;
+      const dy = e.clientY - start.y;
+      const len = Math.hypot(dx, dy);
+      if (dy < -90) {
+        throwBall(e.clientX, e.clientY, dx / len, dy / len, 1, now);
+        return;
+      }
+      S.ball = { k: "idle", t0: now }; // not a throw, snap back
     }
 
     function throwBall(x: number, y: number, dx: number, dy: number, speed: number, now: number) {
@@ -255,7 +281,7 @@ export default function CatchGame({ initialCount }: { initialCount: number }) {
         const wy = cy - y;
         const along = wx * dx + wy * dy;
         const perp = Math.abs(wx * dy - wy * dx);
-        const tol = Math.max(b.width * 0.85, 70);
+        const tol = Math.max(b.width * 1.2, 90); // generous aim assist
         if (along > 0 && perp < tol && perp < bestPerp) {
           bestPerp = perp;
           hitIdx = i;

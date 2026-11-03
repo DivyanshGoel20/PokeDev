@@ -59,7 +59,7 @@ export async function collection(catcherId: number) {
 
 export async function leaderboard(limit = 50) {
   const rows = await q<Raw>(
-    `SELECT * FROM (${SELECT_PUBLIC}) u2 ORDER BY catch_count DESC, caught_count DESC, id ASC LIMIT $1`,
+    `SELECT * FROM (${SELECT_PUBLIC} WHERE u.face IS NOT NULL) u2 ORDER BY catch_count DESC, caught_count DESC, id ASC LIMIT $1`,
     [limit],
   );
   return rows.map(toPublic);

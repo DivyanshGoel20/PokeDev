@@ -34,13 +34,19 @@ export function loadFace(): Promise<FaceApi> {
 
 export type Box = { x: number; y: number; width: number; height: number };
 
-/** Fast detection of all faces (boxes only) for live tracking. */
+/**
+ * Detection of all faces (boxes only) for live tracking. Uses the fast tiny detector, and when it
+ * sees nothing, falls back to the slower but more robust SSD detector.
+ */
 export async function detectBoxes(input: HTMLVideoElement | HTMLCanvasElement): Promise<Box[]> {
   const faceapi = await loadFace();
-  const res = await faceapi.detectAllFaces(
+  let res = await faceapi.detectAllFaces(
     input,
-    new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.45 }),
+    new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.3 }),
   );
+  if (res.length === 0) {
+    res = await faceapi.detectAllFaces(input, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.4 }));
+  }
   return res.map((d) => {
     const b = d.box;
     return { x: b.x, y: b.y, width: b.width, height: b.height };
