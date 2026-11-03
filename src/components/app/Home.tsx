@@ -1,7 +1,8 @@
 "use client";
-import { TYPES, TYPE_KEYS, trainerLevel, type AppState } from "@/lib/types";
+import { TYPES, TYPE_KEYS, type AppState } from "@/lib/types";
+import { levelInfo } from "@/lib/levels";
 import { DevBall } from "../DevBall";
-import { Lid, Portrait, TypeBadge, dexNo } from "../ui";
+import { Lid, Portrait, dexNo } from "../ui";
 import type { Tab } from "./AppShell";
 import { PrizeBanner } from "../DevconBits";
 
@@ -24,39 +25,38 @@ export default function Home({
   const recent = [...caught].sort((a, b) => Date.parse(b.caughtAt!) - Date.parse(a.caughtAt!)).slice(0, 10);
   const typesCaught = new Set(caught.map((c) => c.type));
   const pct = others.length ? Math.round((caught.length / others.length) * 100) : 0;
-  const hour = new Date().getHours();
-  const greet = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const lv = levelInfo(me.catchCount);
 
   return (
     <>
-      <Lid title="POKEDEV" subtitle="Catch every builder" />
+      <Lid
+        right={
+          <button
+            onClick={() => setTab("me")}
+            style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10, background: "none", border: 0, padding: 0, color: "#fff", minWidth: 0 }}
+          >
+            <span style={{ textAlign: "right", minWidth: 0 }}>
+              <b style={{ display: "block", fontSize: 16, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "52vw" }}>
+                {me.displayName}
+              </b>
+              <span className="px" style={{ fontSize: 8, opacity: 0.85, letterSpacing: ".04em" }}>
+                LV.{lv.level} {lv.title.toUpperCase()}
+              </span>
+            </span>
+            <span style={{ border: "3px solid #fff", borderRadius: 16, boxShadow: "0 0 0 2px var(--ink)", display: "block" }}>
+              <Portrait size={46} radius={12} displayName={me.displayName} username={me.username} type={me.type} caught avatar={me.avatar} />
+            </span>
+          </button>
+        }
+      />
       <main className="wrap">
-        {/* trainer strip */}
-        <div className="row" style={{ marginTop: 4 }}>
-          <Portrait size={56} displayName={me.displayName} username={me.username} type={me.type} caught radius={16} avatar={me.avatar} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="small muted">{greet}, trainer</div>
-            <div style={{ fontWeight: 700, fontSize: 21, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {me.displayName}
-            </div>
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <div className="px" style={{ fontSize: 12 }}>
-              LV.{trainerLevel(me.catchCount)}
-            </div>
-            <div style={{ marginTop: 6 }}>
-              <TypeBadge type={me.type} small />
-            </div>
-          </div>
-        </div>
-
         {/* catch hero */}
         <button
           onClick={onCatch}
           style={{
             display: "block",
             width: "100%",
-            marginTop: 18,
+            marginTop: 4,
             padding: 0,
             border: "3px solid var(--ink)",
             borderRadius: 22,
@@ -115,6 +115,47 @@ export default function Home({
         {/* prize */}
         <div style={{ marginTop: 16 }}>
           <PrizeBanner rank={me.catchCount ? me.rank : undefined} onClick={() => setTab("ranks")} />
+        </div>
+
+        {/* level */}
+        <div className="section-label">
+          <span>Trainer level</span>
+          <span>
+            {me.catchCount} caught
+          </span>
+        </div>
+        <div className="panel">
+          <div className="row spread" style={{ marginBottom: 10 }}>
+            <div className="row" style={{ gap: 10 }}>
+              <span
+                className="px"
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 12,
+                  background: "var(--red)",
+                  color: "#fff",
+                  display: "grid",
+                  placeItems: "center",
+                  fontSize: 14,
+                  border: "2.5px solid var(--ink)",
+                }}
+              >
+                {lv.level}
+              </span>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 17 }}>{lv.title}</div>
+                <div className="small muted">
+                  {lv.next
+                    ? `${lv.next.need} more ${lv.next.need === 1 ? "catch" : "catches"} to Lv.${lv.next.level} ${lv.next.title}`
+                    : "Max level. Legendary."}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="bar">
+            <i style={{ width: `${Math.round(lv.progress * 100)}%` }} />
+          </div>
         </div>
 
         {/* progress */}

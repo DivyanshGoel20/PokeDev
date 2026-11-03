@@ -23,5 +23,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "This face is already registered to another player" }, { status: 409 });
 
   await q("UPDATE users SET face = $1::float8[] WHERE id = $2", [descriptor, me.id]);
+
+  // Joined from someone's "onboard them now" QR? Their catch counts now (one-time, 6-hour invite).
+  const [{ invite_token: token } = { invite_token: null }] = await q<{ invite_token: string | null }>(
+    "UPDATE users SET invite_token = NULL WHERE id = $1 RETURNING (SELECT invite_token FROM users WHERE id = $1)",
+    [me.id],
+  );
+  if (token) {
+    const used = await q<{ catcher_id: number }>(
+      `UPDATE invites SET used_by = $2
+       WHERE token = $1 AND used_by IS NULL AND catcher_id <> $2 AND created_at > now() - interval '6 hours'
+       RETURNING catcher_id`,
+      [token, me.id],
+    );
+    if (used[0]) {
+      await q("INSERT INTO catches (catcher_id, caught_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", [used[0].catcher_id, me.id]);
+    }
+  }
   return NextResponse.json({ ok: true });
 }

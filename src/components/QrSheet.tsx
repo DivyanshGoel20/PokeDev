@@ -5,17 +5,17 @@ import { Icon } from "./ui";
 import { DevBall } from "./DevBall";
 
 /** Full-screen QR code that brings a new player straight to sign-up. */
-export default function QrSheet({ inviter, pending, onClose }: { inviter: string; pending?: boolean; onClose: () => void }) {
+export default function QrSheet({ inviter, onClose }: { inviter: string; onClose: () => void }) {
   const [svg, setSvg] = useState("");
   const [url, setUrl] = useState("");
 
   useEffect(() => {
-    const u = `${window.location.origin}/join?ref=${encodeURIComponent(inviter)}${pending ? "&t=1" : ""}`;
+    const u = `${window.location.origin}/join?ref=${encodeURIComponent(inviter)}`;
     setUrl(u);
     QRCode.toString(u, { type: "svg", margin: 1, errorCorrectionLevel: "M", color: { dark: "#1d1d22", light: "#ffffff" } })
       .then(setSvg)
       .catch(() => setSvg(""));
-  }, [inviter, pending]);
+  }, [inviter]);
 
   async function share() {
     try {
@@ -56,9 +56,7 @@ export default function QrSheet({ inviter, pending, onClose }: { inviter: string
             <DevBall size={56} style={{ margin: "0 auto 12px", display: "block" }} />
             <div style={{ fontWeight: 700, fontSize: 22, lineHeight: 1.2 }}>Scan to join PokeDev</div>
             <div style={{ opacity: 0.9, marginTop: 6, fontSize: 15 }}>
-              {pending
-                ? "Once they join, they'll be added to your PokeDev automatically."
-                : "Catch every builder at Devcon. Top 3 PokeDev masters win a prize."}
+              Catch every builder at Devcon. Top 3 PokeDev masters win a prize.
             </div>
           </div>
 

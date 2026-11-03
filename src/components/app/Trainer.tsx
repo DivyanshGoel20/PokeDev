@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
-import { TYPES, TYPE_KEYS, trainerLevel, type AppState } from "@/lib/types";
+import { TYPES, TYPE_KEYS, type AppState } from "@/lib/types";
+import { levelInfo } from "@/lib/levels";
 import { postJSON } from "@/lib/client";
 import { Lid, Portrait, TypeBadge } from "../ui";
 import { ProfileFields, type Profile } from "../ProfileFields";
@@ -18,6 +19,7 @@ export default function Trainer({ state, refresh, onInvite }: { state: AppState;
     farcaster: me.farcaster,
     telegram: me.telegram,
     avatar: me.avatar ?? null,
+    links: me.links,
   });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -103,11 +105,11 @@ export default function Trainer({ state, refresh, onInvite }: { state: AppState;
                   <div className="muted small" style={{ fontWeight: 600, marginTop: 2 }}>
                     @{me.username}
                   </div>
-                  <div className="row" style={{ marginTop: 12, gap: 8 }}>
+                  <div style={{ marginTop: 12 }}>
                     <TypeBadge type={me.type} />
-                    <span className="px" style={{ fontSize: 11 }}>
-                      LV.{trainerLevel(me.catchCount)}
-                    </span>
+                  </div>
+                  <div className="px" style={{ fontSize: 9, lineHeight: 1.7, marginTop: 10 }}>
+                    LV.{levelInfo(me.catchCount).level} {levelInfo(me.catchCount).title.toUpperCase()}
                   </div>
                 </div>
                 <Portrait size={96} radius={14} displayName={me.displayName} username={me.username} type={me.type} caught avatar={me.avatar} />

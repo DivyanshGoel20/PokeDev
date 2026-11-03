@@ -10,6 +10,10 @@ export const TYPES = {
 } as const;
 
 export type DevType = keyof typeof TYPES;
+
+/** Extra profile links beyond X / Farcaster / Telegram. */
+export type Link = { label: string; url: string };
+export const MAX_LINKS = 5;
 export const TYPE_KEYS = Object.keys(TYPES) as DevType[];
 
 export function typeInfo(t: string) {
@@ -29,6 +33,7 @@ export type DexEntry = {
   xHandle?: string;
   farcaster?: string;
   telegram?: string;
+  links?: Link[];
   caughtAt?: string;
   /** Profile picture URL (only for yourself and players you have caught). */
   avatar?: string;
@@ -47,6 +52,7 @@ export type Me = {
   xHandle: string;
   farcaster: string;
   telegram: string;
+  links: Link[];
   catchable: boolean;
   avatar?: string;
   catchCount: number;
@@ -59,9 +65,6 @@ export type CaughtBy = { displayName: string; username: string; type: DevType; a
 
 export type AppState = { me: Me; dex: DexEntry[]; ranks: RankRow[]; caughtBy: CaughtBy[] };
 
-export function trainerLevel(catches: number) {
-  return 1 + Math.floor(Math.sqrt(catches * 2));
-}
 
 /** Minimum "facing the camera" score (1 = straight on) to register or catch a face. */
 export const FRONTAL_MIN = 0.55;

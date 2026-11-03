@@ -23,10 +23,24 @@ export async function POST(req: Request) {
   if (existing.length) return NextResponse.json({ error: "That username is taken" }, { status: 409 });
 
   const avatar = cleanPhoto(body.avatar);
+  // One-time invite from a catch attempt: redeemed when this player finishes their face scan.
+  const invite = typeof body.invite === "string" && /^[a-z0-9]{12,40}$/.test(body.invite) ? body.invite : null;
   const rows = await q<{ id: number }>(
-    `INSERT INTO users (username, pass_hash, display_name, building, type, x_handle, farcaster, telegram, avatar, avatar_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CASE WHEN $9::text IS NULL THEN NULL ELSE now() END) RETURNING id`,
-    [username, await hashPassword(password), p.displayName, p.building, p.type, p.xHandle, p.farcaster, p.telegram, avatar],
+    `INSERT INTO users (username, pass_hash, display_name, building, type, x_handle, farcaster, telegram, links, avatar, avatar_at, invite_token)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CASE WHEN $10::text IS NULL THEN NULL ELSE now() END, $11) RETURNING id`,
+    [
+      username,
+      await hashPassword(password),
+      p.displayName,
+      p.building,
+      p.type,
+      p.xHandle,
+      p.farcaster,
+      p.telegram,
+      JSON.stringify(p.links),
+      avatar,
+      invite,
+    ],
   );
   await createSession(rows[0].id);
   return NextResponse.json({ ok: true });

@@ -1,23 +1,12 @@
 "use client";
 import { useMemo, useState } from "react";
 import type { AppState } from "@/lib/types";
-import type { Pending } from "@/lib/pending";
 import { DevBall } from "../DevBall";
-import { Icon, Lid, Portrait, Silhouette, TypeBadge } from "../ui";
+import { Icon, Lid, Portrait, TypeBadge } from "../ui";
 
 type Filter = "all" | "caught" | "missing";
 
-export default function Dex({
-  state,
-  pending,
-  onEntry,
-  onPending,
-}: {
-  state: AppState;
-  pending: Pending[];
-  onEntry: (no: number) => void;
-  onPending: (id: string) => void;
-}) {
+export default function Dex({ state, onEntry }: { state: AppState; onEntry: (no: number) => void }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const others = state.dex.filter((e) => !e.isMe);
@@ -80,29 +69,6 @@ export default function Dex({
             </div>
 
             <div className="dex-list">
-              {filter !== "caught" &&
-                !query &&
-                pending.map((p) => (
-                  <button key={p.id} className="dex-row" onClick={() => onPending(p.id)} style={{ borderStyle: "dashed" }}>
-                    <span className="dex-no">
-                      No.
-                      <br />
-                      ???
-                    </span>
-                    <span className="portrait" style={{ width: 44, height: 44, borderRadius: 10 }}>
-                      <Silhouette />
-                    </span>
-                    <span className="dex-name">
-                      Unknown builder
-                      <small>
-                        Pending · seen {new Date(p.at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
-                      </small>
-                    </span>
-                    <span className="px" style={{ fontSize: 14, width: 20, textAlign: "center" }}>
-                      ?
-                    </span>
-                  </button>
-                ))}
               {rows.map((e) => {
                 const known = e.caught || e.isMe;
                 return (

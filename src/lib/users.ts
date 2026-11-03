@@ -1,6 +1,6 @@
 import "server-only";
 import { q } from "./db";
-import { TYPE_KEYS, type AppState, type CaughtBy, type DevType, type DexEntry, type RankRow } from "./types";
+import { MAX_LINKS, TYPE_KEYS, type AppState, type CaughtBy, type DevType, type DexEntry, type Link, type RankRow } from "./types";
 
 type DexRaw = {
   id: number;
@@ -12,6 +12,7 @@ type DexRaw = {
   x_handle: string;
   farcaster: string;
   telegram: string;
+  links: string;
   catchable: boolean;
   caught_at: string | null;
   avatar_at: string | null;
@@ -23,7 +24,7 @@ type DexRaw = {
 export async function buildState(meId: number): Promise<AppState | null> {
   const [dexRows, rankRows, byRows] = await Promise.all([
     q<DexRaw>(
-      `SELECT u.id, u.username, u.display_name, u.building, u.type, u.x_handle, u.farcaster, u.telegram, u.catchable,
+      `SELECT u.id, u.username, u.display_name, u.building, u.type, u.x_handle, u.farcaster, u.telegram, u.links, u.catchable,
          row_number() OVER (ORDER BY u.id)::int AS no,
          c.created_at AS caught_at, CASE WHEN u.avatar IS NOT NULL THEN u.avatar_at END AS avatar_at,
          (SELECT count(*) FROM catches x WHERE x.catcher_id = u.id)::int AS catch_count,
@@ -71,6 +72,7 @@ export async function buildState(meId: number): Promise<AppState | null> {
       xHandle: r.x_handle,
       farcaster: r.farcaster,
       telegram: r.telegram,
+      links: parseLinks(r.links),
       caughtAt: r.caught_at ? new Date(r.caught_at).toISOString() : undefined,
       avatar: avatarOf(r),
       catchCount: Number(r.catch_count),
@@ -111,6 +113,7 @@ export async function buildState(meId: number): Promise<AppState | null> {
       xHandle: meRow.x_handle,
       farcaster: meRow.farcaster,
       telegram: meRow.telegram,
+      links: parseLinks(meRow.links),
       catchable: meRow.catchable,
       avatar: avatarOf(meRow),
       catchCount: myCatches,
@@ -153,8 +156,39 @@ export function cleanPhoto(v: unknown): string | null {
   return m[1];
 }
 
+export function parseLinks(raw: string | null | undefined): Link[] {
+  try {
+    const v = JSON.parse(raw || "[]");
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Validate extra links: http(s) only, short labels, at most MAX_LINKS. */
+export function cleanLinks(v: unknown): Link[] {
+  if (!Array.isArray(v)) return [];
+  const out: Link[] = [];
+  for (const item of v.slice(0, MAX_LINKS)) {
+    const it = item as { label?: unknown; url?: unknown };
+    let url = cleanText(it.url, 200).replace(/\s/g, "");
+    if (!url) continue;
+    if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+    try {
+      const u = new URL(url);
+      if (!/^https?:$/.test(u.protocol) || !u.hostname.includes(".")) continue;
+      const label = cleanText(it.label, 24) || u.hostname.replace(/^www\./, "");
+      out.push({ label, url: u.toString() });
+    } catch {
+      /* skip invalid */
+    }
+  }
+  return out;
+}
+
 export function profileFields(body: Record<string, unknown>) {
   return {
+    links: cleanLinks(body.links),
     displayName: cleanText(body.displayName, 40),
     building: cleanText(body.building, 140),
     type: cleanType(body.type),

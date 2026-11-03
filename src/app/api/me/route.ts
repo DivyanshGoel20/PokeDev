@@ -16,8 +16,8 @@ export async function PATCH(req: Request) {
     if (!p.displayName) return NextResponse.json({ error: "Add your name" }, { status: 400 });
     if (!p.type) return NextResponse.json({ error: "Pick your type" }, { status: 400 });
     await q(
-      `UPDATE users SET display_name=$1, building=$2, type=$3, x_handle=$4, farcaster=$5, telegram=$6 WHERE id=$7`,
-      [p.displayName, p.building, p.type, p.xHandle, p.farcaster, p.telegram, me.id],
+      `UPDATE users SET display_name=$1, building=$2, type=$3, x_handle=$4, farcaster=$5, telegram=$6, links=$7 WHERE id=$8`,
+      [p.displayName, p.building, p.type, p.xHandle, p.farcaster, p.telegram, JSON.stringify(p.links), me.id],
     );
     // Profile picture: a new JPEG data URL replaces it, null removes it, anything else leaves it alone.
     const raw = (body.profile as Record<string, unknown>).avatar;

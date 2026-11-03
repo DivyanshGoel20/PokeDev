@@ -1,6 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
-import { TYPES, TYPE_KEYS } from "@/lib/types";
+import { MAX_LINKS, TYPES, TYPE_KEYS, type Link } from "@/lib/types";
 
 export type Profile = {
   displayName: string;
@@ -11,9 +11,10 @@ export type Profile = {
   telegram: string;
   /** Existing picture URL, a new JPEG data URL, or null (none / removed). */
   avatar?: string | null;
+  links: Link[];
 };
 
-export const emptyProfile: Profile = { displayName: "", building: "", type: "", xHandle: "", farcaster: "", telegram: "", avatar: null };
+export const emptyProfile: Profile = { displayName: "", building: "", type: "", xHandle: "", farcaster: "", telegram: "", avatar: null, links: [] };
 
 /** Center-crop and shrink a picked image to a 320x320 JPEG data URL. */
 async function toAvatar(file: File): Promise<string> {
@@ -162,6 +163,51 @@ export function ProfileFields({ value, onChange }: { value: Profile; onChange: (
         <span>TG</span>
         <input className="input" autoCapitalize="none" autoCorrect="off" value={value.telegram} onChange={set("telegram")} placeholder="Telegram" style={{ paddingLeft: 46 }} />
       </div>
+      <LinksEditor links={value.links} onChange={(links) => onChange({ ...value, links })} />
     </>
+  );
+}
+
+function LinksEditor({ links, onChange }: { links: Link[]; onChange: (l: Link[]) => void }) {
+  const set = (i: number, k: keyof Link, v: string) => onChange(links.map((l, j) => (j === i ? { ...l, [k]: v } : l)));
+  return (
+    <div className="field" style={{ marginTop: 4 }}>
+      {links.map((l, i) => (
+        <div key={i} className="link-edit">
+          <input
+            className="input"
+            value={l.label}
+            maxLength={24}
+            onChange={(e) => set(i, "label", e.target.value)}
+            placeholder="Label (e.g. GitHub)"
+          />
+          <div className="row" style={{ gap: 8 }}>
+            <input
+              className="input"
+              value={l.url}
+              inputMode="url"
+              autoCapitalize="none"
+              autoCorrect="off"
+              onChange={(e) => set(i, "url", e.target.value)}
+              placeholder="github.com/you"
+            />
+            <button
+              type="button"
+              className="btn btn-sm btn-quiet"
+              aria-label="Remove link"
+              onClick={() => onChange(links.filter((_, j) => j !== i))}
+              style={{ minHeight: 52, padding: "0 14px" }}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      ))}
+      {links.length < MAX_LINKS && (
+        <button type="button" className="btn btn-quiet" onClick={() => onChange([...links, { label: "", url: "" }])}>
+          + Add another link
+        </button>
+      )}
+    </div>
   );
 }

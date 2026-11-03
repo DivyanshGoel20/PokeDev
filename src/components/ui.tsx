@@ -1,4 +1,5 @@
 import { typeInfo } from "@/lib/types";
+import { BrandBall } from "./BrandBall";
 
 export function dexNo(n: number) {
   return `No.${String(n).padStart(3, "0")}`;
@@ -130,19 +131,22 @@ export const Icon = {
   ),
 };
 
-/** Red device lid used as the header on every screen. */
+/** Device lid used as the header on every screen: PokeDev ball logo on the left, title or custom content on the right. */
 export function Lid({
   title,
   subtitle,
   onBack,
   backHref,
   big = true,
+  right,
 }: {
-  title: string;
+  title?: string;
   subtitle?: string;
   onBack?: () => void;
   backHref?: string;
   big?: boolean;
+  /** Replaces the title block (e.g. the player's picture on Home). */
+  right?: React.ReactNode;
 }) {
   return (
     <header className="lid">
@@ -156,16 +160,13 @@ export function Lid({
             <Icon.back />
           </a>
         ) : null}
-        <div className={big ? "lens" : "lens sm"} />
-        <div className="leds">
-          <i />
-          <i />
-          <i />
-        </div>
-        <div className="lid-title">
-          <b>{title}</b>
-          {subtitle && <span>{subtitle}</span>}
-        </div>
+        <BrandBall size={big ? 50 : 38} />
+        {right ?? (
+          <div className="lid-title">
+            <b>{title}</b>
+            {subtitle && <span>{subtitle}</span>}
+          </div>
+        )}
       </div>
     </header>
   );

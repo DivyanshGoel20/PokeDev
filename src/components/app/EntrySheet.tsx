@@ -76,11 +76,14 @@ export default function EntrySheet({ entry: e, onClose }: { entry: DexEntry; onC
             : "No data. Find this builder at Devcon and catch them to unlock their entry."}
         </div>
 
-        {known && !e.isMe && (e.xHandle || e.farcaster || e.telegram) && (
+        {known && !e.isMe && (e.xHandle || e.farcaster || e.telegram || e.links?.length) && (
           <div className="stack" style={{ marginTop: 16 }}>
             {e.xHandle && <Social href={`https://x.com/${e.xHandle}`} label="X" handle={`@${e.xHandle}`} />}
             {e.farcaster && <Social href={`https://farcaster.xyz/${e.farcaster}`} label="Farcaster" handle={e.farcaster} />}
             {e.telegram && <Social href={`https://t.me/${e.telegram}`} label="Telegram" handle={`@${e.telegram}`} />}
+            {e.links?.map((l) => (
+              <Social key={l.url} href={l.url} label={l.label} handle={new URL(l.url).hostname.replace(/^www\./, "")} />
+            ))}
           </div>
         )}
       </main>
@@ -102,8 +105,8 @@ function Info({ label, value }: { label: string; value: string }) {
 function Social({ href, label, handle }: { href: string; label: string; handle: string }) {
   return (
     <a className="btn" href={href} target="_blank" rel="noreferrer" style={{ justifyContent: "space-between" }}>
-      <span>{label}</span>
-      <span className="muted" style={{ fontWeight: 600 }}>
+      <span style={{ flexShrink: 0 }}>{label}</span>
+      <span className="muted" style={{ fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {handle} ↗
       </span>
     </a>

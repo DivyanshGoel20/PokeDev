@@ -3,8 +3,6 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AppState, DexEntry } from "@/lib/types";
 import { loadFace } from "@/lib/face";
-import { postJSON } from "@/lib/client";
-import { listPending, removePending, type Pending } from "@/lib/pending";
 import { DevBall } from "../DevBall";
 import { Icon } from "../ui";
 import Home from "./Home";
@@ -12,7 +10,6 @@ import Dex from "./Dex";
 import Ranks from "./Ranks";
 import Trainer from "./Trainer";
 import EntrySheet from "./EntrySheet";
-import PendingSheet from "./PendingSheet";
 import QrSheet from "../QrSheet";
 
 const CatchGame = dynamic(() => import("../CatchGame"), { ssr: false });
@@ -20,7 +17,7 @@ const CatchGame = dynamic(() => import("../CatchGame"), { ssr: false });
 export type Tab = "home" | "dex" | "ranks" | "me";
 const TABS: Tab[] = ["home", "dex", "ranks", "me"];
 
-type Overlay = { o: "catch" } | { o: "entry"; no: number } | { o: "pending"; id: string } | { o: "qr" } | null;
+type Overlay = { o: "catch" } | { o: "entry"; no: number } | { o: "qr" } | null;
 
 const SEEN_KEY = "pokedev_seen_caughtby";
 
@@ -30,7 +27,6 @@ export default function AppShell({ initial }: { initial: AppState }) {
   const [overlay, setOverlay] = useState<Overlay>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
-  const [pending, setPending] = useState<Pending[]>([]);
   const [banner, setBanner] = useState<{ title: string; body: string; action?: "catch" | "entry"; no?: number } | null>(null);
 
   /* ---------- data ---------- */
@@ -53,7 +49,7 @@ export default function AppShell({ initial }: { initial: AppState }) {
   useEffect(() => {
     const onVis = () => document.visibilityState === "visible" && refresh();
     document.addEventListener("visibilitychange", onVis);
-    const id = window.setInterval(() => document.visibilityState === "visible" && refresh(), 30_000);
+    const id = window.setInterval(() => document.visibilityState === "visible" && refresh(), 15_000);
     return () => {
       document.removeEventListener("visibilitychange", onVis);
       window.clearInterval(id);
@@ -68,55 +64,35 @@ export default function AppShell({ initial }: { initial: AppState }) {
     else window.setTimeout(start, 600);
   }, []);
 
-  /* ---------- pending entries (stored only on this phone) ---------- */
+  // Older versions kept "pending" face data on the phone; wipe any leftovers.
   useEffect(() => {
-    const sync = () => setPending(listPending());
-    sync();
-    window.addEventListener("pokedev-pending", sync);
-    return () => window.removeEventListener("pokedev-pending", sync);
+    try {
+      localStorage.removeItem("pokedev_pending_v1");
+      localStorage.removeItem("pokedev_pending_v2");
+    } catch {
+      /* ignore */
+    }
   }, []);
 
-  const checking = useRef(false);
-  const checkPending = useCallback(async () => {
-    const list = listPending();
-    if (!list.length || checking.current) return;
-    checking.current = true;
-    try {
-      const r = await postJSON<{ results?: { id: string; result: string; username?: string }[] }>("/api/pending", {
-        items: list.map((p) => ({ id: p.id, descriptor: p.descriptor })),
-      });
-      const joined = (r.results ?? []).filter((x) => (x.result === "caught" || x.result === "already") && x.username);
-      for (const x of r.results ?? []) {
-        if (x.result === "self") removePending(x.id);
-      }
-      if (!joined.length) return;
-      for (const x of joined) removePending(x.id);
-      const s = await refresh();
-      const first = s?.dex.find((e) => e.username === joined[0].username);
-      setBanner({
-        title: "A pending builder joined!",
-        body:
-          joined.length > 1
-            ? `${joined.length} pending builders were added to your PokeDev.`
-            : `${first?.displayName ?? "They"} just joined and was added to your PokeDev.`,
-        action: first ? "entry" : undefined,
-        no: first?.no,
-      });
-    } finally {
-      checking.current = false;
-    }
-  }, [refresh]);
-
+  /* ---------- "your invite joined" banner ---------- */
+  // Catches you made yourself are registered in `known` first, so only invite catches pop a banner.
+  const known = useRef<Set<string> | null>(null);
   useEffect(() => {
-    checkPending();
-    const onVis = () => document.visibilityState === "visible" && checkPending();
-    document.addEventListener("visibilitychange", onVis);
-    const id = window.setInterval(() => document.visibilityState === "visible" && checkPending(), 20_000);
-    return () => {
-      document.removeEventListener("visibilitychange", onVis);
-      window.clearInterval(id);
-    };
-  }, [checkPending]);
+    const caught = state.dex.filter((e) => e.caught && e.username).map((e) => e.username!);
+    if (!known.current) {
+      known.current = new Set(caught);
+      return;
+    }
+    const fresh = state.dex.filter((e) => e.caught && e.username && !known.current!.has(e.username));
+    caught.forEach((u) => known.current!.add(u));
+    if (!fresh.length) return;
+    setBanner({
+      title: fresh.length > 1 ? `${fresh.length} builders joined from your invites!` : `${fresh[0].displayName} joined from your invite!`,
+      body: "They're in your PokeDev now. Nice onboarding.",
+      action: "entry",
+      no: fresh[0].no,
+    });
+  }, [state.dex]);
 
   /* ---------- "someone caught you" banner ---------- */
   useEffect(() => {
@@ -175,11 +151,11 @@ export default function AppShell({ initial }: { initial: AppState }) {
 
   const openCatch = useCallback(() => open({ o: "catch" }), [open]);
   const openEntry = useCallback((no: number) => open({ o: "entry", no }), [open]);
-  const openPending = useCallback((id: string) => open({ o: "pending", id }), [open]);
   const openQr = useCallback(() => open({ o: "qr" }), [open]);
 
   const onCaught = useCallback(
     async (username: string): Promise<DexEntry | null> => {
+      known.current?.add(username);
       const s = (await refresh()) ?? stateRef.current;
       return s.dex.find((e) => e.username === username) ?? null;
     },
@@ -187,13 +163,12 @@ export default function AppShell({ initial }: { initial: AppState }) {
   );
 
   const entry = overlay?.o === "entry" ? state.dex.find((e) => e.no === overlay.no) : undefined;
-  const pendingOpen = overlay?.o === "pending" ? pending.find((p) => p.id === overlay.id) : undefined;
 
   return (
     <>
       <div key={tab} className="screen">
         {tab === "home" && <Home state={state} onCatch={openCatch} onEntry={openEntry} onInvite={openQr} setTab={setTab} />}
-        {tab === "dex" && <Dex state={state} pending={pending} onEntry={openEntry} onPending={openPending} />}
+        {tab === "dex" && <Dex state={state} onEntry={openEntry} />}
         {tab === "ranks" && <Ranks state={state} onEntry={openEntry} />}
         {tab === "me" && <Trainer state={state} refresh={refresh} onInvite={openQr} />}
       </div>
@@ -213,7 +188,6 @@ export default function AppShell({ initial }: { initial: AppState }) {
       </nav>
 
       {entry && <EntrySheet entry={entry} onClose={close} />}
-      {pendingOpen && <PendingSheet pending={pendingOpen} inviter={state.me.username} onClose={close} />}
       {overlay?.o === "qr" && <QrSheet inviter={state.me.username} onClose={close} />}
 
       {banner && (

@@ -1,12 +1,11 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cameraErrorMessage, coverMap, describeFaces, detectBoxes, loadFace, startCamera, stopCamera, type Box, type TrackedFace } from "@/lib/face";
-import { addPending, type Pending } from "@/lib/pending";
-import QrSheet from "./QrSheet";
+import QRCode from "qrcode";
 import { postJSON } from "@/lib/client";
 import { sfx } from "@/lib/sfx";
 import { FRONTAL_MIN, typeInfo, type DexEntry } from "@/lib/types";
-import { Icon, Portrait, Silhouette, TypeBadge, dexNo } from "./ui";
+import { Icon, Portrait, TypeBadge, dexNo } from "./ui";
 import { DevBall } from "./DevBall";
 
 type CatchResult = "caught" | "already" | "nomatch" | "hidden" | "self" | "unclear" | "side" | "far" | "error";
@@ -65,8 +64,7 @@ export default function CatchGame({
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
   const [modal, setModal] = useState<{ entry: DexEntry; fresh: boolean } | null>(null);
-  const [pendingModal, setPendingModal] = useState<Pending | null>(null);
-  const [qrFor, setQrFor] = useState<Pending | null>(null);
+  const [notLive, setNotLive] = useState<{ token: string | null } | null>(null);
   const [facesFrontal, setFacesFrontal] = useState(0);
   const [facesSeen, setFacesSeen] = useState(0);
   const [hintGone, setHintGone] = useState(false);
@@ -77,7 +75,7 @@ export default function CatchGame({
     particles: [] as Particle[],
     flash: 0,
     trail: [] as { x: number; y: number; t: number }[],
-    result: null as (ApiResult & { entry?: DexEntry | null; pending?: Pending }) | null,
+    result: null as (ApiResult & { entry?: DexEntry | null; invite?: string | null }) | null,
     tracking: true,
     mirrored: false,
     modalOpen: false,
@@ -196,8 +194,10 @@ export default function CatchGame({
           const entry = await onCaught(r.username);
           g.current.result = { ...r, entry };
         } else if (r.result === "nomatch") {
-          // Not a player yet: keep their face fingerprint as a pending entry on THIS phone only.
-          g.current.result = { result: "nomatch", pending: addPending(best.descriptor) };
+          // Not a player yet: nothing about them is kept. Create a one-time invite so that if they
+          // join right now from your QR code, the catch is yours.
+          const inv = await postJSON<{ token?: string }>("/api/invite", {});
+          g.current.result = { result: "nomatch", invite: inv.token ?? null };
         } else {
           g.current.result = r;
         }
@@ -613,9 +613,9 @@ export default function CatchGame({
           ctx.globalAlpha = 1;
           if (t >= 1) {
             const res = S.result;
-            if (res?.result === "nomatch" && res.pending) {
+            if (res?.result === "nomatch") {
               S.modalOpen = true;
-              setPendingModal(res.pending);
+              setNotLive({ token: res.invite ?? null });
             } else {
               showToast(MESSAGES[(res?.result as keyof typeof MESSAGES) ?? "error"] ?? MESSAGES.error);
             }
@@ -678,7 +678,7 @@ export default function CatchGame({
 
   function closeModal() {
     setModal(null);
-    setPendingModal(null);
+    setNotLive(null);
     g.current.modalOpen = false;
   }
 
@@ -762,7 +762,7 @@ export default function CatchGame({
       </div>
 
       {/* hint / messages */}
-      {status === "ready" && (toast || !hintGone || (facesSeen > 0 && facesFrontal === 0)) && !modal && !pendingModal && (
+      {status === "ready" && (toast || !hintGone || (facesSeen > 0 && facesFrontal === 0)) && !modal && !notLive && (
         <div
           style={{
             position: "absolute",
@@ -813,10 +813,7 @@ export default function CatchGame({
         </div>
       )}
 
-      {pendingModal && (
-        <PendingModal pending={pendingModal} onContinue={closeModal} onQr={() => setQrFor(pendingModal)} />
-      )}
-      {qrFor && <QrSheet inviter={inviter} pending onClose={() => setQrFor(null)} />}
+      {notLive && <NotLiveModal token={notLive.token} inviter={inviter} onContinue={closeModal} />}
 
       {modal && (
         <CaughtModal
@@ -842,10 +839,20 @@ function CaughtModal({ entry, fresh, onContinue, onOpen }: { entry: DexEntry; fr
   const text = lines[line];
 
   useEffect(() => {
-    if (typed >= text.length) return;
+    if (typed >= text.length) {
+      // Auto-advance to the next line after a short pause (tapping skips ahead).
+      if (line < lines.length - 1) {
+        const id = window.setTimeout(() => {
+          setLine((l) => l + 1);
+          setTyped(0);
+        }, 900);
+        return () => window.clearTimeout(id);
+      }
+      return;
+    }
     const id = window.setTimeout(() => setTyped((n) => n + 1), 22);
     return () => window.clearTimeout(id);
-  }, [typed, text]);
+  }, [typed, text, line, lines.length]);
 
   function advance() {
     if (typed < text.length) return setTyped(text.length);
@@ -923,70 +930,56 @@ function CaughtModal({ entry, fresh, onContinue, onOpen }: { entry: DexEntry; fr
   );
 }
 
-function PendingModal({ pending, onContinue, onQr }: { pending: Pending; onContinue: () => void; onQr: () => void }) {
+function NotLiveModal({ token, inviter, onContinue }: { token: string | null; inviter: string; onContinue: () => void }) {
+  const [svg, setSvg] = useState("");
+  const url = typeof window === "undefined" ? "" : `${window.location.origin}/join?${token ? `invite=${token}` : `ref=${inviter}`}`;
+  useEffect(() => {
+    QRCode.toString(url, { type: "svg", margin: 1, errorCorrectionLevel: "M", color: { dark: "#1d1d22", light: "#ffffff" } })
+      .then(setSvg)
+      .catch(() => setSvg(""));
+  }, [url]);
+
   return (
     <div
       style={{
         position: "absolute",
         inset: 0,
         zIndex: 5,
-        background: "rgba(20,20,24,.72)",
+        background: "rgba(20,20,24,.78)",
+        overflowY: "auto",
+        padding: "calc(env(safe-area-inset-top) + 16px) 14px calc(env(safe-area-inset-bottom) + 16px)",
         display: "flex",
         flexDirection: "column",
-        justifyContent: "flex-end",
-        padding: "calc(env(safe-area-inset-top) + 16px) 14px calc(env(safe-area-inset-bottom) + 16px)",
+        justifyContent: "center",
       }}
     >
-      <div style={{ maxWidth: 460, width: "100%", margin: "0 auto" }}>
-        <div className="bezel pop" style={{ marginBottom: 14 }}>
-          <div className="lcd" style={{ padding: 10 }}>
-            <div className="row spread px" style={{ fontSize: 10, marginBottom: 10 }}>
-              <span>No.???</span>
-              <span style={{ color: "#2f2c9e" }}>PENDING</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "center", position: "relative" }}>
-              <div style={{ width: 170, height: 170, borderRadius: 10, background: "rgba(255,255,255,.4)" }}>
-                <Silhouette />
-              </div>
-              <span
-                className="px"
-                style={{
-                  position: "absolute",
-                  bottom: -10,
-                  background: "var(--ink)",
-                  color: "#fff",
-                  borderRadius: 8,
-                  padding: "6px 10px",
-                  fontSize: 14,
-                }}
-              >
-                ?
-              </span>
-            </div>
-            <div className="center" style={{ fontWeight: 700, fontSize: 19, marginTop: 18 }}>
-              Unknown builder
-            </div>
-            <div className="center small" style={{ opacity: 0.75 }}>
-              Seen {new Date(pending.at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })} · waiting for them to join
-            </div>
+      <div style={{ maxWidth: 420, width: "100%", margin: "0 auto" }}>
+        <div className="dialog pop">
+          <div className="px" style={{ fontSize: 10, color: "var(--red)", marginBottom: 8 }}>
+            NOT LIVE YET
+          </div>
+          This builder isn&apos;t on PokeDev. Onboard them now or they&apos;ll be lost! Let them scan this
+          {token ? ", and they're yours the moment they finish signing up." : "."}
+        </div>
+        <div
+          className="pop"
+          style={{
+            marginTop: 14,
+            background: "#fff",
+            border: "3px solid var(--ink)",
+            borderRadius: 20,
+            padding: 14,
+            boxShadow: "0 5px 0 var(--ink)",
+            animationDelay: ".08s",
+          }}
+        >
+          <div className="qr" style={{ width: "100%", aspectRatio: "1 / 1" }} dangerouslySetInnerHTML={{ __html: svg }} />
+          <div className="px center muted" style={{ fontSize: 8, marginTop: 10, lineHeight: 1.6 }}>
+            {token ? "ONE-TIME INVITE · VALID 6 HOURS" : "INVITE LINK"}
           </div>
         </div>
-
-        <div className="dialog">
-          Oh no, they got away! This builder isn&apos;t on PokeDev yet. We saved them as a pending entry, and the moment they join
-          they&apos;ll land in your PokeDev automatically.
-        </div>
-
-        <button
-          onClick={onQr}
-          className="btn btn-yellow"
-          style={{ marginTop: 14, justifyContent: "space-between" }}
-        >
-          <span>Show them your QR code to join</span>
-          <span>→</span>
-        </button>
-        <button className="btn" style={{ marginTop: 10 }} onClick={onContinue}>
-          Keep catching
+        <button className="btn btn-red" style={{ marginTop: 16 }} onClick={onContinue}>
+          Done, keep catching
         </button>
       </div>
     </div>

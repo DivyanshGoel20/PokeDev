@@ -12,12 +12,20 @@ export default function Join() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [ref, setRef] = useState("");
-  const [tried, setTried] = useState(false);
+  const [invite, setInvite] = useState<{ token: string; name: string } | null>(null);
 
   useEffect(() => {
-    const r = new URLSearchParams(window.location.search).get("ref") ?? "";
-    setRef(r.replace(/[^a-z0-9_]/gi, "").slice(0, 20));
-    setTried(new URLSearchParams(window.location.search).get("t") === "1");
+    const sp = new URLSearchParams(window.location.search);
+    setRef((sp.get("ref") ?? "").replace(/[^a-z0-9_]/gi, "").slice(0, 20));
+    const token = (sp.get("invite") ?? "").replace(/[^a-z0-9]/g, "");
+    if (token) {
+      fetch(`/api/invite?t=${token}`)
+        .then((r) => r.json())
+        .then((d: { valid?: boolean; displayName?: string }) => {
+          if (d.valid) setInvite({ token, name: d.displayName ?? "A trainer" });
+        })
+        .catch(() => {});
+    }
   }, []);
 
   function next(e: React.FormEvent) {
@@ -35,7 +43,7 @@ export default function Join() {
     if (!profile.displayName.trim()) return setError("Add your name");
     if (!profile.type) return setError("Pick your type");
     setBusy(true);
-    const r = await postJSON("/api/signup", { username, password, ...profile });
+    const r = await postJSON("/api/signup", { username, password, ...profile, invite: invite?.token });
     if (r.error) {
       setError(r.error);
       setBusy(false);
@@ -62,11 +70,11 @@ export default function Join() {
         {step === 0 ? (
           <form onSubmit={next} className="screen" key="s0">
             <div className="dialog" style={{ marginBottom: 22 }}>
-              {ref && !tried
-                ? `@${ref} invited you to PokeDev! First things first: what should we call you?`
+              {invite
+                ? `${invite.name} just tried to catch you, but you're not live yet! Join now and you'll land in their PokeDev. Catch people, not Pokémon: first, pick a username.`
                 : ref
-                ? `@${ref} tried to catch you, but you're not in the game yet! Join now and they'll get you automatically. First, pick a username.`
-                : "Hi there, future trainer! First things first: what should we call you?"}
+                  ? `@${ref} invited you to PokeDev! Catch every builder at Devcon. First, pick a username.`
+                  : "Hi there, future trainer! Catch every builder at Devcon. First, pick a username."}
             </div>
             {error && <div className="error">{error}</div>}
             <div className="field">
