@@ -1,36 +1,36 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PokeDev
 
-## Getting Started
+Gotta catch every builder. A mobile web game for Devcon: meet someone, point your camera at them, swipe a DevBall and their builder card lands in your collection.
 
-First, run the development server:
+## How it works
+
+1. **Join**: username + passcode, a builder card (name, type, what you're building, socials) and a 3-second face scan.
+2. **Catch** (`/play`): live camera with face tracking. Swipe the ball at a glowing face. The face is matched against registered players; on a match their card is added to your PokeDev.
+3. **PokeDev** (`/dex`), **Ranks** (`/leaderboard`) and **Me** (`/me`: edit card, hide mode, rescan, delete account).
+
+## Privacy
+
+- Only registered players can be caught. Faces of anyone else are compared, then discarded.
+- No photos are uploaded or stored. The browser turns a face into a 128-number descriptor ([face-api](https://github.com/vladmandic/face-api)); only that is sent and saved.
+- One face per account (prevents catching yourself with a second account).
+- Hide mode and one-tap account deletion (removes profile, face data and every catch).
+
+## Stack
+
+- Next.js 15 (App Router), deployed on Vercel
+- Postgres (Neon) via `DATABASE_URL`; face distance is computed in plain SQL, no extensions needed
+- Local dev without a database URL uses an embedded Postgres (PGlite) stored in `./.pglite`
+- Face detection/recognition in the browser with `@vladmandic/face-api` (models in `public/models`)
+
+## Develop
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The camera needs HTTPS on phones. `localhost` works on the same machine; to test on a phone, deploy a preview to Vercel.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Matching
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Face descriptors are compared with euclidean distance. A catch needs distance below `MATCH_THRESHOLD` (0.45) and the runner-up must be at least `MATCH_MARGIN` (0.06) further away, otherwise the player is asked for a closer look. Both are in `src/lib/types.ts`.
