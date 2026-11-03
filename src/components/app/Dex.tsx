@@ -73,7 +73,11 @@ export default function Dex({ state, onEntry }: { state: AppState; onEntry: (no:
                 const known = e.caught || e.isMe;
                 return (
                   <button key={e.no} className={`dex-row${known ? "" : " unknown"}`} onClick={() => onEntry(e.no)}>
-                    <span className="dex-no">{dexNo(e.no)}</span>
+                    <span className="dex-no">
+                      No.
+                      <br />
+                      {String(e.no).padStart(3, "0")}
+                    </span>
                     <Portrait
                       size={44}
                       radius={10}
