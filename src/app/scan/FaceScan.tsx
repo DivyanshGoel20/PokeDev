@@ -155,7 +155,7 @@ export default function FaceScan({ isNew, hasFace, name }: { isNew: boolean; has
             {phase === "loading" ? "Booting scanner..." : hint}
           </div>
           <p className="center small muted" style={{ marginTop: 12 }}>
-            Nothing is recorded. Your face becomes 128 numbers on this phone, and only those are saved.
+            No video or photo leaves your phone. Your face becomes 128 numbers here, and only those are saved.
           </p>
         </div>
 

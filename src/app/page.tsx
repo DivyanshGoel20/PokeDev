@@ -72,7 +72,7 @@ function Landing() {
         <div className="panel">
           <ul className="list-plain">
             <li>Only registered players can be caught. Anyone else is ignored.</li>
-            <li>Your face is saved as 128 numbers that can&apos;t be turned back into a picture.</li>
+            <li>Your face scan is saved as 128 numbers used only for matching, never as a photo or video.</li>
             <li>When someone catches you, they keep the snapshot of that moment. Only they can see it.</li>
             <li>Hide mode any time. Deleting your account erases everything, including those snapshots.</li>
           </ul>
