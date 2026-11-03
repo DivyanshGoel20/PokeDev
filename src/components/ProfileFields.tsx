@@ -1,6 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import { MAX_LINKS, TYPES, TYPE_KEYS, type Link } from "@/lib/types";
+import type { FieldErrors } from "@/lib/client";
 
 export type Profile = {
   displayName: string;
@@ -112,19 +113,42 @@ function AvatarPicker({ value, onChange }: { value: string | null | undefined; o
   );
 }
 
-export function ProfileFields({ value, onChange }: { value: Profile; onChange: (p: Profile) => void }) {
+export function ProfileFields({
+  value,
+  onChange,
+  errors = {},
+}: {
+  value: Profile;
+  onChange: (p: Profile) => void;
+  errors?: FieldErrors;
+}) {
   const set = (k: keyof Profile) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     onChange({ ...value, [k]: e.target.value });
 
   return (
     <>
       <AvatarPicker value={value.avatar} onChange={(avatar) => onChange({ ...value, avatar })} />
-      <div className="field">
-        <label>Your name</label>
-        <input className="input" maxLength={40} value={value.displayName} onChange={set("displayName")} placeholder="Ada Lovelace" autoComplete="name" />
+      <div className="field" id="f-displayName" data-invalid={!!errors.displayName}>
+        <label htmlFor="in-displayName">
+          Your name<span className="req">*</span>
+        </label>
+        <input
+          id="in-displayName"
+          className="input"
+          maxLength={40}
+          value={value.displayName}
+          onChange={set("displayName")}
+          placeholder="Ada Lovelace"
+          autoComplete="name"
+          aria-required
+          aria-invalid={!!errors.displayName}
+        />
+        {errors.displayName && <div className="field-msg">{errors.displayName}</div>}
       </div>
-      <div className="field">
-        <label>Your type</label>
+      <div className="field" id="f-type" data-invalid={!!errors.type}>
+        <label>
+          Your type<span className="req">*</span>
+        </label>
         <div className="type-grid">
           {TYPE_KEYS.map((k) => (
             <button type="button" key={k} className="type-pick" data-on={value.type === k} onClick={() => onChange({ ...value, type: k })}>
@@ -135,6 +159,7 @@ export function ProfileFields({ value, onChange }: { value: Profile; onChange: (
             </button>
           ))}
         </div>
+        {errors.type && <div className="field-msg">{errors.type}</div>}
       </div>
       <div className="field">
         <label>What are you building?</label>

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { postJSON } from "@/lib/client";
+import { focusField, postJSON, type FieldErrors } from "@/lib/client";
 import { Lid } from "@/components/ui";
 import { ProfileFields, emptyProfile, type Profile } from "@/components/ProfileFields";
 
@@ -11,6 +11,13 @@ export default function Join() {
   const [profile, setProfile] = useState<Profile>(emptyProfile);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [errs, setErrs] = useState<FieldErrors>({});
+
+  function fail(e: FieldErrors) {
+    setErrs(e);
+    const first = (["username", "password", "displayName", "type"] as const).find((k) => e[k]);
+    if (first) focusField(`f-${first}`);
+  }
   const [ref, setRef] = useState("");
   const [invite, setInvite] = useState<{ token: string; name: string } | null>(null);
 
@@ -31,8 +38,13 @@ export default function Join() {
   function next(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    if (!/^[a-z0-9_]{3,20}$/.test(username)) return setError("Username: 3-20 lowercase letters, numbers or _");
-    if (password.length < 6) return setError("Passcode must be at least 6 characters");
+    const e2: FieldErrors = {};
+    if (!username) e2.username = "Pick a username";
+    else if (!/^[a-z0-9_]{3,20}$/.test(username)) e2.username = "3-20 characters: lowercase letters, numbers or _";
+    if (!password) e2.password = "Choose a passcode";
+    else if (password.length < 6) e2.password = "At least 6 characters";
+    if (Object.keys(e2).length) return fail(e2);
+    setErrs({});
     setStep(1);
     window.scrollTo(0, 0);
   }
@@ -40,14 +52,24 @@ export default function Join() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    if (!profile.displayName.trim()) return setError("Add your name");
-    if (!profile.type) return setError("Pick your type");
+    const e2: FieldErrors = {};
+    if (!profile.displayName.trim()) e2.displayName = "Add your name so people know who they caught";
+    if (!profile.type) e2.type = "Pick the type that fits you best";
+    if (Object.keys(e2).length) return fail(e2);
+    setErrs({});
     setBusy(true);
     const r = await postJSON("/api/signup", { username, password, ...profile, invite: invite?.token });
     if (r.error) {
-      setError(r.error);
       setBusy(false);
-      if (/username/i.test(r.error)) setStep(0);
+      if (/username/i.test(r.error)) {
+        setStep(0);
+        fail({ username: r.error });
+      } else if (/name/i.test(r.error)) fail({ displayName: r.error });
+      else if (/type/i.test(r.error)) fail({ type: r.error });
+      else {
+        setError(r.error);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
     } else {
       window.location.href = "/scan?new=1";
     }
@@ -77,8 +99,13 @@ export default function Join() {
                   : "Hi there, future trainer! Catch every builder at Devcon. First, pick a username."}
             </div>
             {error && <div className="error">{error}</div>}
-            <div className="field">
-              <label>Username</label>
+            <p className="small muted" style={{ margin: "0 0 14px" }}>
+              Fields marked <span className="req">*</span> are required.
+            </p>
+            <div className="field" id="f-username" data-invalid={!!errs.username}>
+              <label htmlFor="in-username">
+                Username<span className="req">*</span>
+              </label>
               <div className="input-icon">
                 <span>@</span>
                 <input
@@ -88,14 +115,34 @@ export default function Join() {
                   autoComplete="username"
                   maxLength={20}
                   value={username}
-                  onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                  onChange={(e) => {
+                    setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""));
+                    if (errs.username) setErrs({ ...errs, username: undefined });
+                  }}
                   placeholder="satoshi"
+                  id="in-username"
+                  aria-invalid={!!errs.username}
                 />
               </div>
+              {errs.username && <div className="field-msg">{errs.username}</div>}
             </div>
-            <div className="field">
-              <label>Passcode (6+ characters)</label>
-              <input className="input" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <div className="field" id="f-password" data-invalid={!!errs.password}>
+              <label htmlFor="in-password">
+                Passcode (6+ characters)<span className="req">*</span>
+              </label>
+              <input
+                id="in-password"
+                className="input"
+                type="password"
+                autoComplete="new-password"
+                value={password}
+                aria-invalid={!!errs.password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (errs.password) setErrs({ ...errs, password: undefined });
+                }}
+              />
+              {errs.password && <div className="field-msg">{errs.password}</div>}
             </div>
             <button className="btn btn-red" style={{ marginTop: 10 }}>
               Next
@@ -107,7 +154,18 @@ export default function Join() {
               Now, tell us about yourself. This is your dex entry: what trainers see when they catch you.
             </div>
             {error && <div className="error">{error}</div>}
-            <ProfileFields value={profile} onChange={setProfile} />
+            <p className="small muted" style={{ margin: "0 0 14px" }}>
+              Fields marked <span className="req">*</span> are required. Everything else is optional.
+            </p>
+            <ProfileFields
+              value={profile}
+              errors={errs}
+              onChange={(p) => {
+                setProfile(p);
+                if (errs.displayName && p.displayName.trim()) setErrs((x) => ({ ...x, displayName: undefined }));
+                if (errs.type && p.type) setErrs((x) => ({ ...x, type: undefined }));
+              }}
+            />
             <button className="btn btn-red" disabled={busy} style={{ marginTop: 10 }}>
               {busy ? "Registering..." : "Next: scan your face"}
             </button>

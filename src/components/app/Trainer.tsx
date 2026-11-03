@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { TYPES, TYPE_KEYS, type AppState } from "@/lib/types";
 import { levelInfo } from "@/lib/levels";
-import { postJSON } from "@/lib/client";
+import { focusField, postJSON, type FieldErrors } from "@/lib/client";
 import { Lid, Portrait, TypeBadge } from "../ui";
 import { ProfileFields, type Profile } from "../ProfileFields";
 import { Disclaimer } from "../DevconBits";
@@ -23,6 +23,7 @@ export default function Trainer({ state, refresh, onInvite }: { state: AppState;
   });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [errs, setErrs] = useState<FieldErrors>({});
   const typesCaught = new Set(dex.filter((e) => e.caught).map((e) => e.type));
 
   async function toggleCatchable() {
@@ -35,8 +36,14 @@ export default function Trainer({ state, refresh, onInvite }: { state: AppState;
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true);
     setError("");
+    const e2: FieldErrors = {};
+    if (!profile.displayName.trim()) e2.displayName = "Add your name";
+    if (!profile.type) e2.type = "Pick your type";
+    setErrs(e2);
+    if (e2.displayName) return focusField("f-displayName");
+    if (e2.type) return focusField("f-type");
+    setBusy(true);
     // Only send the picture when it changed: a new data URL, or null when removed.
     const avatarChanged = profile.avatar !== (me.avatar ?? null);
     const r = await postJSON("/api/me", { profile: { ...profile, avatar: avatarChanged ? profile.avatar : undefined } }, "PATCH");
@@ -67,7 +74,7 @@ export default function Trainer({ state, refresh, onInvite }: { state: AppState;
         {editing ? (
           <form onSubmit={save} className="panel screen">
             {error && <div className="error">{error}</div>}
-            <ProfileFields value={profile} onChange={setProfile} />
+            <ProfileFields value={profile} onChange={setProfile} errors={errs} />
             <div className="row" style={{ marginTop: 6 }}>
               <button type="button" className="btn btn-quiet" onClick={() => setEditing(false)}>
                 Cancel

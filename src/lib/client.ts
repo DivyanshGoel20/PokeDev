@@ -16,3 +16,16 @@ export async function postJSON<T = Record<string, unknown>>(
     return { error: "Network error, check your connection" } as T & { error?: string };
   }
 }
+
+/** Scroll a form field into view and focus it (used to point people at a missing field). */
+export function focusField(id: string) {
+  window.requestAnimationFrame(() => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    const input = el.querySelector<HTMLElement>("input, textarea, button");
+    input?.focus({ preventScroll: true });
+  });
+}
+
+export type FieldErrors = Partial<Record<"username" | "password" | "displayName" | "type", string>>;

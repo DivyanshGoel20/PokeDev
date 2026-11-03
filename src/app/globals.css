@@ -932,3 +932,43 @@ h3 {
   border-radius: 14px;
   margin-bottom: 10px;
 }
+
+/* ---------------- required fields & inline errors ---------------- */
+.req {
+  color: var(--danger);
+  font-weight: 700;
+  margin-left: 2px;
+}
+
+.field[data-invalid="true"] .input {
+  border-color: var(--danger);
+  background: #fff6f5;
+}
+
+.field[data-invalid="true"] .type-grid {
+  outline: 2px solid var(--danger);
+  outline-offset: 4px;
+  border-radius: 14px;
+}
+
+.field[data-invalid="true"] {
+  animation: shake 0.35s ease;
+}
+
+.field-msg {
+  color: #b3261e;
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+@keyframes shake {
+  20%,
+  60% {
+    transform: translateX(-5px);
+  }
+  40%,
+  80% {
+    transform: translateX(5px);
+  }
+}
