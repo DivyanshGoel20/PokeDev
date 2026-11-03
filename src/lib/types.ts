@@ -78,4 +78,6 @@ export const FRONTAL_MIN_SCAN = 0.65;
  */
 export const MATCH = { STRONG: 0.47, STRONG_MARGIN: 0.04, LOOSE: 0.55, LOOSE_MARGIN: 0.1, UNSURE: 0.62 } as const;
 /** Registering a face this close to another player's is refused (one face, one account). */
-export const DUPLICATE_FACE = 0.4;
+export const DUPLICATE_FACE = 0.45;
+/** Passcode recovery by face: stricter than catching, and clearly closer than anyone else. */
+export const RECOVER = { MAX: 0.42, MARGIN: 0.08 } as const;

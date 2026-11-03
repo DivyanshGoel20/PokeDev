@@ -20,7 +20,10 @@ export async function POST(req: Request) {
   const near = await nearestFaces(descriptor, 3);
   const clash = near.find((n) => n.id !== me.id && Number(n.dist) < DUPLICATE_FACE);
   if (clash)
-    return NextResponse.json({ error: "This face is already registered to another player" }, { status: 409 });
+    return NextResponse.json(
+      { error: "This face already has a PokeDev account. One account per person!", code: "duplicate" },
+      { status: 409 },
+    );
 
   await q("UPDATE users SET face = $1::float8[] WHERE id = $2", [descriptor, me.id]);
 

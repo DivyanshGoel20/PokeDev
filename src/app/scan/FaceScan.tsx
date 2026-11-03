@@ -9,7 +9,25 @@ import { FRONTAL_MIN_SCAN } from "@/lib/types";
 const SAMPLES = 5;
 type Phase = "intro" | "loading" | "scanning" | "saving" | "done" | "error";
 
-export default function FaceScan({ isNew, hasFace, name }: { isNew: boolean; hasFace: boolean; name: string }) {
+export default function FaceScan({
+  isNew,
+  hasFace,
+  name,
+  mode = "register",
+  password,
+  onBack,
+}: {
+  isNew: boolean;
+  hasFace: boolean;
+  name: string;
+  /** "recover": find the account that owns this face and give it a new passcode. */
+  mode?: "register" | "recover";
+  password?: string;
+  onBack?: () => void;
+}) {
+  const recover = mode === "recover";
+  const [duplicate, setDuplicate] = useState(false);
+  const [recovered, setRecovered] = useState("");
   const [phase, setPhase] = useState<Phase>("intro");
   const [hint, setHint] = useState("Look straight at the camera");
   const [progress, setProgress] = useState(0);
@@ -89,9 +107,21 @@ export default function FaceScan({ isNew, hasFace, name }: { isNew: boolean; has
     runningRef.current = false;
     stopCamera(streamRef.current);
     setPhase("saving");
-    const r = await postJSON("/api/face", { descriptor: meanDescriptor(samples) });
+    if (recover) {
+      const r = await postJSON<{ username?: string }>("/api/recover", { descriptor: meanDescriptor(samples), password });
+      if (r.error) {
+        setError(r.error);
+        setPhase("error");
+      } else {
+        setRecovered(r.username ?? "");
+        setPhase("done");
+      }
+      return;
+    }
+    const r = await postJSON<{ code?: string }>("/api/face", { descriptor: meanDescriptor(samples) });
     if (r.error) {
       setError(r.error);
+      setDuplicate(r.code === "duplicate");
       setPhase("error");
     } else {
       setPhase("done");
@@ -102,7 +132,9 @@ export default function FaceScan({ isNew, hasFace, name }: { isNew: boolean; has
 
   return (
     <>
-      {isNew ? (
+      {recover ? (
+        <Lid title="RECOVER" subtitle="Unlock with your face" onBack={onBack} big={false} />
+      ) : isNew ? (
         <Lid title="NEW TRAINER" subtitle="Step 3 of 3" big={false} />
       ) : (
         <Lid title="FACE SCAN" subtitle="Update your fingerprint" backHref={hasFace ? "/#me" : "/"} big={false} />
@@ -179,9 +211,11 @@ export default function FaceScan({ isNew, hasFace, name }: { isNew: boolean; has
         {phase === "intro" && (
           <div className="screen">
             <div className="dialog">
-              {isNew
-                ? `Last step, ${name.split(" ")[0]}! Let's scan your face so other trainers can catch you.`
-                : "Let's rescan your face. Use good light and hold your phone at eye level."}
+              {recover
+                ? "Now look at the camera. If your face matches your account, it gets the new passcode and you're back in."
+                : isNew
+                  ? `Last step, ${name.split(" ")[0]}! Let's scan your face so other trainers can catch you.`
+                  : "Let's rescan your face. Use good light and hold your phone at eye level."}
             </div>
             <div className="panel" style={{ marginTop: 14 }}>
               <ul className="list-plain">
@@ -206,7 +240,7 @@ export default function FaceScan({ isNew, hasFace, name }: { isNew: boolean; has
           <div className="center" style={{ marginTop: 70 }}>
             <DevBall size={84} className="bob" />
             <p className="px" style={{ fontSize: 10, marginTop: 22 }}>
-              SAVING...
+              {recover ? "LOOKING YOU UP..." : "SAVING..."}
             </p>
           </div>
         )}
@@ -214,9 +248,20 @@ export default function FaceScan({ isNew, hasFace, name }: { isNew: boolean; has
         {phase === "error" && (
           <div className="screen" style={{ marginTop: 10 }}>
             <div className="error">{error}</div>
-            <button className="btn btn-red" onClick={begin}>
-              Try again
-            </button>
+            {duplicate ? (
+              <div className="stack">
+                <button className="btn btn-red" onClick={() => window.location.replace("/recover?from=signup")}>
+                  That&apos;s me: use my existing account
+                </button>
+                <button className="btn btn-quiet" onClick={begin}>
+                  Scan again
+                </button>
+              </div>
+            ) : (
+              <button className="btn btn-red" onClick={begin}>
+                Try again
+              </button>
+            )}
           </div>
         )}
 
@@ -226,18 +271,20 @@ export default function FaceScan({ isNew, hasFace, name }: { isNew: boolean; has
               <div className="lcd" style={{ padding: "30px 16px" }}>
                 <DevBall size={96} className="pop" />
                 <div className="px" style={{ fontSize: 14, marginTop: 22, lineHeight: 1.5 }}>
-                  {isNew ? "REGISTERED!" : "UPDATED!"}
+                  {recover ? "WELCOME BACK!" : isNew ? "REGISTERED!" : "UPDATED!"}
                 </div>
               </div>
             </div>
             <div className="dialog" style={{ marginTop: 14, textAlign: "left" }}>
-              {isNew
-                ? "Your journey begins! Find other builders and throw a DevBall at them."
-                : "Your face fingerprint was updated."}
+              {recover
+                ? `You're back in as @${recovered}. Your new passcode is set, and any other logins were signed out.`
+                : isNew
+                  ? "Your journey begins! Find other builders and throw a DevBall at them."
+                  : "Your face fingerprint was updated."}
             </div>
             {/* full page load (fresh server state), replacing history so Back doesn't return to the scan */}
-            <button className="btn btn-red" style={{ marginTop: 18 }} onClick={() => window.location.replace(isNew ? "/" : "/#me")}>
-              {isNew ? "Let's go!" : "Back to PokeDev"}
+            <button className="btn btn-red" style={{ marginTop: 18 }} onClick={() => window.location.replace(isNew || recover ? "/" : "/#me")}>
+              {recover ? "Continue" : isNew ? "Let's go!" : "Back to PokeDev"}
             </button>
           </div>
         )}

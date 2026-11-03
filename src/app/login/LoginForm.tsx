@@ -54,6 +54,9 @@ export default function LoginForm() {
             {busy ? "Loading..." : "Continue"}
           </button>
         </form>
+        <Link href="/recover" className="btn btn-quiet" style={{ marginTop: 12 }}>
+          Forgot passcode? Unlock with your face
+        </Link>
         <p className="center small muted" style={{ marginTop: 22 }}>
           New here?{" "}
           <Link href="/join" style={{ color: "var(--red)", fontWeight: 700 }}>
