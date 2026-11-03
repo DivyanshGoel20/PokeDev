@@ -1,12 +1,19 @@
 /** Builder "types", styled after classic monster-game elemental types. */
 export const TYPES = {
-  zk: { label: "ZK", name: "Zero-Knowledge", color: "#705898", fg: "#fff" },
-  l2: { label: "L2", name: "Layer 2", color: "#F8D030", fg: "#3a2f00" },
-  defi: { label: "DeFi", name: "DeFi", color: "#78C850", fg: "#14320a" },
-  nft: { label: "NFT", name: "NFT / Art", color: "#F85888", fg: "#fff" },
-  infra: { label: "Infra", name: "Infrastructure", color: "#A8A8C0", fg: "#22222e" },
-  ai: { label: "AI", name: "AI x Crypto", color: "#F08030", fg: "#fff" },
-  pg: { label: "PubGood", name: "Public Goods", color: "#6890F0", fg: "#fff" },
+  zk: { label: "ZK", name: "Zero-Knowledge", color: "#705898", fg: "#fff" }, // ghost
+  privacy: { label: "Privacy", name: "Privacy", color: "#4A3F3A", fg: "#fff" }, // dark
+  security: { label: "Security", name: "Security", color: "#5F7287", fg: "#fff" }, // steel
+  core: { label: "Core", name: "Core Protocol", color: "#7038F8", fg: "#fff" }, // dragon
+  l2: { label: "L2", name: "Layer 2", color: "#F8D030", fg: "#3a2f00" }, // electric
+  infra: { label: "Infra", name: "Infrastructure", color: "#A8A8C0", fg: "#22222e" }, // steel (light)
+  devtools: { label: "DevTools", name: "DevTools", color: "#A8B820", fg: "#26300a" }, // bug
+  defi: { label: "DeFi", name: "DeFi", color: "#78C850", fg: "#14320a" }, // grass
+  payments: { label: "Pay/RWA", name: "Payments / RWA", color: "#E0C068", fg: "#3a2e08" }, // ground
+  ai: { label: "AI", name: "AI x Crypto", color: "#F08030", fg: "#fff" }, // fire
+  nft: { label: "NFT", name: "NFT / Art", color: "#F85888", fg: "#fff" }, // psychic
+  gaming: { label: "Gaming", name: "Gaming", color: "#C03028", fg: "#fff" }, // fighting
+  ux: { label: "UX", name: "UX / Design", color: "#EE99AC", fg: "#4a1626" }, // fairy
+  pg: { label: "PubGood", name: "Public Goods", color: "#6890F0", fg: "#fff" }, // water
 } as const;
 
 export type DevType = keyof typeof TYPES;
