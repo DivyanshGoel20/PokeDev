@@ -6,8 +6,7 @@ import { rateLimit } from "@/lib/ratelimit";
 
 /**
  * Match a face seen through the camera against registered players.
- * Only the 128-number descriptor is sent here, never a photo: the snapshot is uploaded
- * separately (to /api/catch/photo) and only after a successful match.
+ * Only the 128-number descriptor is sent here; no photo is ever uploaded.
  */
 export async function POST(req: Request) {
   const me = await getUser();

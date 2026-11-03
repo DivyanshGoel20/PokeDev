@@ -32,17 +32,15 @@ export function Silhouette() {
 }
 
 /**
- * The picture for a dex entry: your catch snapshot if you have one, otherwise initials
- * (yourself / no photo) or a silhouette (not caught).
+ * The picture for a dex entry: the player's profile picture if you can see it, otherwise
+ * initials (yourself / no picture) or a silhouette (not caught yet).
  */
 export function Portrait({
   size,
-  username,
   displayName,
   type,
   caught,
-  hasPhoto,
-  caughtAt,
+  avatar,
   radius = 12,
 }: {
   size: number | string;
@@ -50,24 +48,17 @@ export function Portrait({
   displayName?: string;
   type: string;
   caught: boolean;
-  hasPhoto?: boolean;
-  caughtAt?: string;
+  avatar?: string;
   radius?: number;
 }) {
   const t = typeInfo(type);
   const dim = typeof size === "number" ? `${size}px` : size;
   return (
     <div className="portrait" style={{ width: dim, height: dim, borderRadius: radius }}>
-      {hasPhoto && username ? (
+      {avatar ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={`/api/photo/${username}?t=${caughtAt ? Date.parse(caughtAt) : 0}`}
-          alt={displayName ?? ""}
-          loading="lazy"
-          decoding="async"
-          draggable={false}
-        />
-      ) : displayName && (caught || username) ? (
+        <img src={avatar} alt={displayName ?? ""} loading="lazy" decoding="async" draggable={false} />
+      ) : displayName && caught ? (
         <div
           className="initials"
           style={{ background: t.color, color: t.fg, fontSize: typeof size === "number" ? Math.max(10, size / 3.2) : 28 }}

@@ -1,16 +1,31 @@
 "use client";
 
 /**
- * Pending entries: people you threw at who weren't players yet.
- * Stored ONLY on this phone (localStorage), never on the server. They expire after 3 days.
+ * Pending entries: people you threw at (face-on) who weren't players yet.
+ * Only their 128-number face fingerprint is kept, ONLY on this phone (localStorage), never on
+ * the server, and no picture. They expire after 3 days.
  */
-export type Pending = { id: string; descriptor: number[]; photo: string; at: number };
+export type Pending = { id: string; descriptor: number[]; at: number };
 
-const KEY = "pokedev_pending_v1";
+const KEY = "pokedev_pending_v2";
+const OLD_KEY = "pokedev_pending_v1"; // older versions also kept a picture: drop it
+
+function migrate() {
+  try {
+    const old = localStorage.getItem(OLD_KEY);
+    if (old === null) return;
+    const list = (JSON.parse(old) as Pending[]).map(({ id, descriptor, at }) => ({ id, descriptor, at }));
+    localStorage.removeItem(OLD_KEY);
+    if (!localStorage.getItem(KEY)) localStorage.setItem(KEY, JSON.stringify(list));
+  } catch {
+    /* ignore */
+  }
+}
 const TTL = 3 * 24 * 3600 * 1000;
 const MAX = 30;
 
 function read(): Pending[] {
+  migrate();
   try {
     const list = JSON.parse(localStorage.getItem(KEY) || "[]") as Pending[];
     return Array.isArray(list) ? list.filter((p) => Date.now() - p.at < TTL) : [];
@@ -44,7 +59,7 @@ function dist(a: number[], b: number[]) {
 }
 
 /** Add (or refresh, if it's the same face) a pending entry. Returns it. */
-export function addPending(descriptor: number[], photo: string): Pending {
+export function addPending(descriptor: number[]): Pending {
   const list = read();
   const same = list.find((p) => dist(p.descriptor, descriptor) < 0.42);
   if (same) {
@@ -52,7 +67,7 @@ export function addPending(descriptor: number[], photo: string): Pending {
     write([same, ...list.filter((p) => p !== same)]);
     return same;
   }
-  const p: Pending = { id: Math.random().toString(36).slice(2) + Date.now().toString(36), descriptor, photo, at: Date.now() };
+  const p: Pending = { id: Math.random().toString(36).slice(2) + Date.now().toString(36), descriptor, at: Date.now() };
   write([p, ...list]);
   return p;
 }

@@ -33,7 +33,7 @@ export default function Home({
       <main className="wrap">
         {/* trainer strip */}
         <div className="row" style={{ marginTop: 4 }}>
-          <Portrait size={56} displayName={me.displayName} username={me.username} type={me.type} caught radius={16} />
+          <Portrait size={56} displayName={me.displayName} username={me.username} type={me.type} caught radius={16} avatar={me.avatar} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="small muted">{greet}, trainer</div>
             <div style={{ fontWeight: 700, fontSize: 21, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -187,8 +187,7 @@ export default function Home({
                   displayName={e.displayName}
                   type={e.type}
                   caught
-                  hasPhoto={e.hasPhoto}
-                  caughtAt={e.caughtAt}
+                  avatar={e?.avatar}
                   radius={10}
                 />
                 <div className="px" style={{ fontSize: 8, marginTop: 8, color: "var(--muted)" }}>
@@ -216,7 +215,7 @@ export default function Home({
                   className="row"
                   style={{ padding: "10px 0", borderTop: i ? "1.5px dashed var(--line)" : "none" }}
                 >
-                  <Portrait size={38} radius={10} displayName={c.displayName} username={c.username} type={c.type} caught />
+                  <Portrait size={38} radius={10} displayName={c.displayName} username={c.username} type={c.type} caught avatar={c.avatar} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {c.displayName} caught you

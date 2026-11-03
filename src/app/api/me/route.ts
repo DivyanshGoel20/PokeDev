@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { q } from "@/lib/db";
 import { destroySession, getUser } from "@/lib/auth";
-import { profileFields } from "@/lib/users";
+import { cleanPhoto, profileFields } from "@/lib/users";
 
 export async function PATCH(req: Request) {
   const me = await getUser();
@@ -19,6 +19,15 @@ export async function PATCH(req: Request) {
       `UPDATE users SET display_name=$1, building=$2, type=$3, x_handle=$4, farcaster=$5, telegram=$6 WHERE id=$7`,
       [p.displayName, p.building, p.type, p.xHandle, p.farcaster, p.telegram, me.id],
     );
+    // Profile picture: a new JPEG data URL replaces it, null removes it, anything else leaves it alone.
+    const raw = (body.profile as Record<string, unknown>).avatar;
+    if (raw === null) {
+      await q("UPDATE users SET avatar = NULL, avatar_at = NULL WHERE id = $1", [me.id]);
+    } else if (typeof raw === "string" && raw.startsWith("data:")) {
+      const avatar = cleanPhoto(raw);
+      if (!avatar) return NextResponse.json({ error: "That picture couldn't be used, try another one" }, { status: 400 });
+      await q("UPDATE users SET avatar = $1, avatar_at = now() WHERE id = $2", [avatar, me.id]);
+    }
   }
   return NextResponse.json({ ok: true });
 }

@@ -20,8 +20,7 @@ export default function Ranks({ state, onEntry }: { state: AppState; onEntry: (n
         displayName={r.displayName}
         type={r.type}
         caught
-        hasPhoto={d?.hasPhoto}
-        caughtAt={d?.caughtAt}
+        avatar={d?.avatar}
       />
     );
   }

@@ -17,6 +17,7 @@ export default function Trainer({ state, refresh, onInvite }: { state: AppState;
     xHandle: me.xHandle,
     farcaster: me.farcaster,
     telegram: me.telegram,
+    avatar: me.avatar ?? null,
   });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -34,7 +35,9 @@ export default function Trainer({ state, refresh, onInvite }: { state: AppState;
     e.preventDefault();
     setBusy(true);
     setError("");
-    const r = await postJSON("/api/me", { profile }, "PATCH");
+    // Only send the picture when it changed: a new data URL, or null when removed.
+    const avatarChanged = profile.avatar !== (me.avatar ?? null);
+    const r = await postJSON("/api/me", { profile: { ...profile, avatar: avatarChanged ? profile.avatar : undefined } }, "PATCH");
     if (r.error) {
       setBusy(false);
       return setError(r.error);
@@ -107,7 +110,7 @@ export default function Trainer({ state, refresh, onInvite }: { state: AppState;
                     </span>
                   </div>
                 </div>
-                <Portrait size={96} radius={14} displayName={me.displayName} username={me.username} type={me.type} caught />
+                <Portrait size={96} radius={14} displayName={me.displayName} username={me.username} type={me.type} caught avatar={me.avatar} />
               </div>
               {me.building && (
                 <div style={{ padding: "0 16px 14px", fontSize: 14, lineHeight: 1.45 }}>

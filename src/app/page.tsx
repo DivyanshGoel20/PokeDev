@@ -74,11 +74,11 @@ function Landing() {
             </li>
             <li>
               <span className="num-dot">2</span>
-              <span>Spot a builder in the halls, point your camera at them and swipe the DevBall. They have to blink to be caught.</span>
+              <span>Spot a builder in the halls, get them to face you, point your camera and swipe the DevBall.</span>
             </li>
             <li>
               <span className="num-dot">3</span>
-              <span>Gotcha! Their entry, photo from the moment and socials land in your PokeDev.</span>
+              <span>Gotcha! Their card, profile picture and socials land in your PokeDev.</span>
             </li>
           </ol>
         </div>
@@ -88,11 +88,11 @@ function Landing() {
         </div>
         <div className="panel">
           <ul className="list-plain">
-            <li>Only registered players can be caught. If someone throws at a person who isn&apos;t playing, that photo stays on the thrower&apos;s phone only and is deleted after 3 days.</li>
-            <li>Your face scan is saved as 128 numbers used only for matching, never as a photo or video.</li>
-            <li>When someone catches you, they keep the snapshot of that moment. Only they can see it, and it&apos;s only uploaded after a match.</li>
-            <li>You have to blink to be caught, so nobody can catch you from a photo.</li>
-            <li>Hide mode any time. Deleting your account erases everything, including those snapshots.</li>
+            <li>No photos or videos are ever taken or uploaded. The camera only reads faces in the moment.</li>
+            <li>Your face scan is saved as 128 numbers used only for matching.</li>
+            <li>Only registered players can be caught. If you throw at someone who isn&apos;t playing, only their 128 numbers stay on your phone (never our servers) for up to 3 days, in case they join.</li>
+            <li>Your profile picture is optional, and only players who catch you can see it.</li>
+            <li>Hide mode any time. Deleting your account erases everything.</li>
           </ul>
         </div>
         <Disclaimer />

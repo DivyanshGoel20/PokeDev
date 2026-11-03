@@ -30,12 +30,13 @@ export type DexEntry = {
   farcaster?: string;
   telegram?: string;
   caughtAt?: string;
-  hasPhoto?: boolean;
+  /** Profile picture URL (only for yourself and players you have caught). */
+  avatar?: string;
   catchCount?: number;
   caughtCount?: number;
 };
 
-export type RankRow = { username: string; displayName: string; type: DevType; catches: number; isMe: boolean };
+export type RankRow = { username: string; displayName: string; type: DevType; catches: number; isMe: boolean; avatar?: string };
 
 export type Me = {
   no: number;
@@ -47,19 +48,24 @@ export type Me = {
   farcaster: string;
   telegram: string;
   catchable: boolean;
+  avatar?: string;
   catchCount: number;
   caughtCount: number;
   rank: number;
 };
 
 /** Someone who caught you. If you've caught them too, `no` points to their dex entry. */
-export type CaughtBy = { displayName: string; username: string; type: DevType; at: string; no: number; caughtBack: boolean };
+export type CaughtBy = { displayName: string; username: string; type: DevType; at: string; no: number; caughtBack: boolean; avatar?: string };
 
 export type AppState = { me: Me; dex: DexEntry[]; ranks: RankRow[]; caughtBy: CaughtBy[] };
 
 export function trainerLevel(catches: number) {
   return 1 + Math.floor(Math.sqrt(catches * 2));
 }
+
+/** Minimum "facing the camera" score (1 = straight on) to register or catch a face. */
+export const FRONTAL_MIN = 0.55;
+export const FRONTAL_MIN_SCAN = 0.65;
 
 /** Max euclidean distance between face descriptors to count as the same person. */
 export const MATCH_THRESHOLD = 0.45;

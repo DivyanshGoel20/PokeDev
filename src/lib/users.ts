@@ -14,7 +14,7 @@ type DexRaw = {
   telegram: string;
   catchable: boolean;
   caught_at: string | null;
-  has_photo: boolean;
+  avatar_at: string | null;
   catch_count: number;
   caught_count: number;
 };
@@ -25,7 +25,7 @@ export async function buildState(meId: number): Promise<AppState | null> {
     q<DexRaw>(
       `SELECT u.id, u.username, u.display_name, u.building, u.type, u.x_handle, u.farcaster, u.telegram, u.catchable,
          row_number() OVER (ORDER BY u.id)::int AS no,
-         c.created_at AS caught_at, (c.photo IS NOT NULL) AS has_photo,
+         c.created_at AS caught_at, CASE WHEN u.avatar IS NOT NULL THEN u.avatar_at END AS avatar_at,
          (SELECT count(*) FROM catches x WHERE x.catcher_id = u.id)::int AS catch_count,
          (SELECT count(*) FROM catches x WHERE x.caught_id = u.id)::int AS caught_count
        FROM users u
@@ -53,6 +53,11 @@ export async function buildState(meId: number): Promise<AppState | null> {
   const meRow = dexRows.find((r) => r.id === meId);
   if (!meRow) return null;
 
+  // Profile pictures are visible to their owner and to players who caught them.
+  const avatarOf = (r: { username: string; avatar_at: string | null }) =>
+    r.avatar_at ? `/api/avatar/${r.username}?v=${Date.parse(r.avatar_at)}` : undefined;
+  const visible = new Map(dexRows.filter((r) => r.id === meId || r.caught_at).map((r) => [r.id, avatarOf(r)]));
+
   const dex: DexEntry[] = dexRows.map((r) => {
     const isMe = r.id === meId;
     const caught = !!r.caught_at;
@@ -67,7 +72,7 @@ export async function buildState(meId: number): Promise<AppState | null> {
       farcaster: r.farcaster,
       telegram: r.telegram,
       caughtAt: r.caught_at ? new Date(r.caught_at).toISOString() : undefined,
-      hasPhoto: r.has_photo,
+      avatar: avatarOf(r),
       catchCount: Number(r.catch_count),
       caughtCount: Number(r.caught_count),
     };
@@ -79,6 +84,7 @@ export async function buildState(meId: number): Promise<AppState | null> {
     type: r.type as DevType,
     catches: Number(r.catches),
     isMe: r.id === meId,
+    avatar: visible.get(r.id),
   }));
   const myCatches = Number(meRow.catch_count);
   const rank = 1 + ranks.filter((r) => r.catches > myCatches).length;
@@ -91,6 +97,7 @@ export async function buildState(meId: number): Promise<AppState | null> {
     at: new Date(r.at).toISOString(),
     no: noById.get(r.id) ?? 0,
     caughtBack: !!r.caught_back,
+    avatar: visible.get(r.id),
   }));
 
   return {
@@ -105,6 +112,7 @@ export async function buildState(meId: number): Promise<AppState | null> {
       farcaster: meRow.farcaster,
       telegram: meRow.telegram,
       catchable: meRow.catchable,
+      avatar: avatarOf(meRow),
       catchCount: myCatches,
       caughtCount: Number(meRow.caught_count),
       rank,
@@ -137,11 +145,11 @@ export function cleanDescriptor(v: unknown): number[] | null {
   return out.every((n) => Number.isFinite(n) && Math.abs(n) < 10) ? out : null;
 }
 
-/** A small JPEG data URL (the catch snapshot). Returns the base64 payload or null. */
+/** A small JPEG data URL (profile picture). Returns the base64 payload or null. */
 export function cleanPhoto(v: unknown): string | null {
   if (typeof v !== "string") return null;
   const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(v);
-  if (!m || m[1].length > 400_000) return null;
+  if (!m || m[1].length > 300_000) return null;
   return m[1];
 }
 

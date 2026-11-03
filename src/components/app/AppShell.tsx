@@ -2,7 +2,7 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AppState, DexEntry } from "@/lib/types";
-import { loadBlink, loadFace } from "@/lib/face";
+import { loadFace } from "@/lib/face";
 import { postJSON } from "@/lib/client";
 import { listPending, removePending, type Pending } from "@/lib/pending";
 import { DevBall } from "../DevBall";
@@ -62,10 +62,7 @@ export default function AppShell({ initial }: { initial: AppState }) {
 
   // Load + warm up the face models in the background so the camera opens instantly.
   useEffect(() => {
-    const start = () =>
-      loadFace()
-        .then(() => loadBlink())
-        .catch(() => {});
+    const start = () => loadFace().catch(() => {});
     const w = window as Window & { requestIdleCallback?: (cb: () => void) => number };
     if (w.requestIdleCallback) w.requestIdleCallback(start);
     else window.setTimeout(start, 600);
@@ -93,11 +90,7 @@ export default function AppShell({ initial }: { initial: AppState }) {
         if (x.result === "self") removePending(x.id);
       }
       if (!joined.length) return;
-      for (const x of joined) {
-        const p = list.find((pp) => pp.id === x.id);
-        if (p) await postJSON("/api/catch/photo", { username: x.username, photo: p.photo });
-        removePending(x.id);
-      }
+      for (const x of joined) removePending(x.id);
       const s = await refresh();
       const first = s?.dex.find((e) => e.username === joined[0].username);
       setBanner({

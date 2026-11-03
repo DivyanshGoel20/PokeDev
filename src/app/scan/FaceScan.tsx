@@ -4,6 +4,7 @@ import { cameraErrorMessage, describeFaces, distance, loadFace, meanDescriptor, 
 import { postJSON } from "@/lib/client";
 import { DevBall } from "@/components/DevBall";
 import { Lid } from "@/components/ui";
+import { FRONTAL_MIN_SCAN } from "@/lib/types";
 
 const SAMPLES = 5;
 type Phase = "intro" | "loading" | "scanning" | "saving" | "done" | "error";
@@ -58,6 +59,7 @@ export default function FaceScan({ isNew, hasFace, name }: { isNew: boolean; has
         const cy = (f.box.y + f.box.height / 2) / vh;
         if (f.box.width < Math.min(vw, vh) * 0.28) setHint("Move a little closer");
         else if (Math.abs(cx - 0.5) > 0.2 || Math.abs(cy - 0.5) > 0.22) setHint("Center your face in the circle");
+        else if (f.frontal < FRONTAL_MIN_SCAN) setHint("Look straight at the camera, not to the side");
         else if (f.score < 0.8) setHint("Hold still. Good light helps");
         else {
           if (samples.length && distance(meanDescriptor(samples), f.descriptor) > 0.45) samples.length = 0;

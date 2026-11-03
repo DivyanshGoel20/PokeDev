@@ -20,8 +20,7 @@ export default function EntrySheet({ entry: e, onClose }: { entry: DexEntry; onC
                 displayName={e.displayName}
                 type={e.type}
                 caught={e.caught || e.isMe}
-                hasPhoto={e.hasPhoto}
-                caughtAt={e.caughtAt}
+                avatar={e?.avatar}
               />
             </div>
           </div>

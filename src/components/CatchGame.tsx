@@ -1,15 +1,15 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { cameraErrorMessage, coverMap, describeFaces, detectBoxes, loadFace, startCamera, stopCamera, watchForBlink, type Box } from "@/lib/face";
+import { cameraErrorMessage, coverMap, describeFaces, detectBoxes, loadFace, startCamera, stopCamera, type Box, type TrackedFace } from "@/lib/face";
 import { addPending, type Pending } from "@/lib/pending";
 import QrSheet from "./QrSheet";
 import { postJSON } from "@/lib/client";
 import { sfx } from "@/lib/sfx";
-import { typeInfo, type DexEntry } from "@/lib/types";
-import { Icon, Portrait, TypeBadge, dexNo } from "./ui";
+import { FRONTAL_MIN, typeInfo, type DexEntry } from "@/lib/types";
+import { Icon, Portrait, Silhouette, TypeBadge, dexNo } from "./ui";
 import { DevBall } from "./DevBall";
 
-type CatchResult = "caught" | "already" | "nomatch" | "hidden" | "self" | "unclear" | "nolive" | "error";
+type CatchResult = "caught" | "already" | "nomatch" | "hidden" | "self" | "unclear" | "side" | "far" | "error";
 type ApiResult = { result?: CatchResult; username?: string; error?: string };
 
 type Particle = { x: number; y: number; vx: number; vy: number; life: number; max: number; color: string; size: number; star?: boolean };
@@ -37,7 +37,8 @@ const MESSAGES: Record<Exclude<CatchResult, "caught" | "already">, string> = {
   hidden: "This builder is in hide mode right now. Try again later!",
   self: "That's you! You can't catch yourself.",
   unclear: "Couldn't get a clear look. Get a bit closer and try again!",
-  nolive: "It broke free! The blink check failed. Real builders blink, photos don't. Try again and catch them mid-blink!",
+  side: "It broke free! They were facing sideways. Builders can only be caught face to face!",
+  far: "Too far away! Get a little closer so the DevBall can read their face.",
   error: "Signal lost! Check your connection and try again.",
 };
 
@@ -66,12 +67,12 @@ export default function CatchGame({
   const [modal, setModal] = useState<{ entry: DexEntry; fresh: boolean } | null>(null);
   const [pendingModal, setPendingModal] = useState<Pending | null>(null);
   const [qrFor, setQrFor] = useState<Pending | null>(null);
-  const [blink, setBlink] = useState<"watching" | "ok" | null>(null);
+  const [facesFrontal, setFacesFrontal] = useState(0);
   const [facesSeen, setFacesSeen] = useState(0);
   const [hintGone, setHintGone] = useState(false);
 
   const g = useRef({
-    boxes: [] as Box[],
+    boxes: [] as TrackedFace[],
     ball: { k: "idle", t0: 0 } as BallState,
     particles: [] as Particle[],
     flash: 0,
@@ -122,13 +123,14 @@ export default function CatchGame({
       while (alive) {
         const v = videoRef.current;
         if (g.current.tracking && v && v.readyState >= 2) {
-          const boxes = await detectBoxes(v).catch(() => [] as Box[]);
+          const boxes = await detectBoxes(v).catch(() => [] as TrackedFace[]);
           if (!alive) break;
           // Hold the last seen faces briefly so the target doesn't flicker on a missed frame.
           const now = performance.now();
           if (boxes.length || now - lastSeen > 600) {
             g.current.boxes = boxes;
             setFacesSeen(boxes.length);
+            setFacesFrontal(boxes.filter((b) => b.frontal >= FRONTAL_MIN).length);
             const c = canvasRef.current;
             if (c && v.videoWidth) {
               // expose on-screen face centers (used by automated tests)
@@ -148,7 +150,8 @@ export default function CatchGame({
     };
   }, [status]);
 
-  /* ---------------- catch: snapshot -> descriptor + photo -> server ---------------- */
+  /* ---------------- catch: video frame -> face fingerprint -> server ---------------- */
+  // The video frame is only analysed in memory on this phone; no photo is kept or uploaded.
   const resolveCatch = useCallback(
     async (target: Box) => {
       const v = videoRef.current!;
@@ -160,15 +163,8 @@ export default function CatchGame({
       const tcx = target.x + target.width / 2;
       const tcy = target.y + target.height / 2;
       try {
-        // 1) Liveness: the target has to blink while the ball is in the air / wobbling.
-        setBlink("watching");
-        const blinkP = watchForBlink(v, { x: tcx, y: tcy }, Math.max(target.width, target.height), 5500).then((ok) => {
-          if (ok) setBlink("ok");
-          return ok;
-        });
-
-        // 2) Face fingerprint of the person we aimed at, from the snapshot at the throw.
         const faces = await describeFaces(snap);
+        snap.width = snap.height = 0; // drop the frame
         let best: (typeof faces)[number] | null = null;
         let bestD = Infinity;
         for (const f of faces) {
@@ -179,42 +175,29 @@ export default function CatchGame({
           }
         }
         if (!best || bestD > Math.max(target.width, 60)) {
-          await blinkP;
           g.current.result = { result: "unclear" };
           return;
         }
-
-        // Head-and-shoulders snapshot from the moment of the throw.
-        const b = best.box;
-        const side = Math.min(Math.max(b.width, b.height) * 2.1, snap.width, snap.height);
-        const sx = Math.min(Math.max(b.x + b.width / 2 - side / 2, 0), snap.width - side);
-        const sy = Math.min(Math.max(b.y + b.height * 0.55 - side / 2, 0), snap.height - side);
-        const out = document.createElement("canvas");
-        out.width = out.height = 360;
-        const octx = out.getContext("2d")!;
-        if (g.current.mirrored) {
-          octx.translate(360, 0);
-          octx.scale(-1, 1);
+        // Side profiles give unreliable fingerprints: only face-on catches count.
+        if (best.frontal < FRONTAL_MIN) {
+          g.current.result = { result: "side" };
+          return;
         }
-        octx.drawImage(snap, sx, sy, side, side, 0, 0, 360, 360);
-        const photo = out.toDataURL("image/jpeg", 0.82);
-
-        if (!(await blinkP)) {
-          g.current.result = { result: "nolive" };
+        // Tiny faces give unreliable fingerprints too.
+        if (best.box.width < 64) {
+          g.current.result = { result: "far" };
           return;
         }
 
-        // 3) Match. Only the 128 numbers are sent here; the photo is uploaded only after a match.
         const r = await postJSON<ApiResult>("/api/catch", { descriptor: best.descriptor });
         if (r.error) {
           g.current.result = { result: "error", error: r.error };
         } else if ((r.result === "caught" || r.result === "already") && r.username) {
-          await postJSON("/api/catch/photo", { username: r.username, photo });
           const entry = await onCaught(r.username);
           g.current.result = { ...r, entry };
         } else if (r.result === "nomatch") {
-          // Not a player yet: keep them as a pending entry on THIS phone only.
-          g.current.result = { result: "nomatch", pending: addPending(best.descriptor, photo) };
+          // Not a player yet: keep their face fingerprint as a pending entry on THIS phone only.
+          g.current.result = { result: "nomatch", pending: addPending(best.descriptor) };
         } else {
           g.current.result = r;
         }
@@ -331,8 +314,10 @@ export default function CatchGame({
         const along = wx * dx + wy * dy;
         const perp = Math.abs(wx * dy - wy * dx);
         const tol = Math.max(b.width * 1.2, 90); // generous aim assist
-        if (along > 0 && perp < tol && perp < bestPerp) {
-          bestPerp = perp;
+        const facing = S.boxes[i]?.frontal >= FRONTAL_MIN;
+        const cost = perp + (facing ? 0 : 120); // prefer faces looking at you
+        if (along > 0 && perp < tol && cost < bestPerp) {
+          bestPerp = cost;
           hitIdx = i;
         }
       });
@@ -432,7 +417,7 @@ export default function CatchGame({
       ctx.restore();
     }
 
-    function drawReticle(b: Box, t: number, active: boolean) {
+    function drawReticle(b: Box, t: number, active: boolean, facing: boolean) {
       const pad = b.width * 0.14;
       const x = b.x - pad;
       const y = b.y - pad;
@@ -450,7 +435,7 @@ export default function CatchGame({
       ctx.lineJoin = "round";
       for (const [color, width] of [
         [INK, 9],
-        [active ? "#ff5a4e" : "#ffffff", 4.5],
+        [active ? "#f2553a" : facing ? "#ffffff" : "#f6a54c", 4.5],
       ] as const) {
         ctx.strokeStyle = color;
         ctx.lineWidth = width;
@@ -461,6 +446,23 @@ export default function CatchGame({
           ctx.lineTo(cx + sx * L, cy);
         }
         ctx.stroke();
+      }
+      if (!facing && !active) {
+        // "turn to face me" tag above side-on faces
+        const label = "FACE ME";
+        ctx.font = "10px 'Press Start 2P', monospace";
+        const tw = ctx.measureText(label).width + 14;
+        const lx = x + w / 2 - tw / 2;
+        const ly = y - 30;
+        ctx.fillStyle = "#f6a54c";
+        ctx.strokeStyle = INK;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.roundRect(lx, ly, tw, 22, 6);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = INK;
+        ctx.fillText(label, lx + 7, ly + 16);
       }
     }
 
@@ -491,7 +493,8 @@ export default function CatchGame({
 
       const b = S.ball;
       if (b.k === "idle" || b.k === "drag" || b.k === "fly") {
-        screenBoxes().forEach((bx) => drawReticle(bx, now, b.k === "fly" && !!b.hit));
+        const sb = screenBoxes();
+        sb.forEach((bx, i) => drawReticle(bx, now, b.k === "fly" && !!b.hit, (S.boxes[i]?.frontal ?? 1) >= FRONTAL_MIN));
       }
 
       const r0 = rest();
@@ -571,8 +574,8 @@ export default function CatchGame({
           ctx.beginPath();
           ctx.ellipse(b.x, b.y + R * b.s * 0.98, R * b.s * 0.85, R * b.s * 0.22, 0, 0, Math.PI * 2);
           ctx.fill();
-          const blink = Math.sin(el / 110) > 0 ? 1 : 0;
-          drawBall(b.x + rot * 8, b.y, b.s, rot, 0, blink);
+          const glow = Math.sin(el / 110) > 0 ? 1 : 0;
+          drawBall(b.x + rot * 8, b.y, b.s, rot, 0, glow);
           const res = S.result;
           if (n >= MIN_WOBBLES && ph > 0.55 && res) {
             if ((res.result === "caught" || res.result === "already") && res.entry) {
@@ -599,7 +602,6 @@ export default function CatchGame({
             const res = S.result!;
             S.ball = { k: "idle", t0: now };
             S.modalOpen = true;
-            setBlink(null);
             setModal({ entry: res.entry!, fresh: res.result === "caught" });
           }
           break;
@@ -611,7 +613,6 @@ export default function CatchGame({
           ctx.globalAlpha = 1;
           if (t >= 1) {
             const res = S.result;
-            setBlink(null);
             if (res?.result === "nomatch" && res.pending) {
               S.modalOpen = true;
               setPendingModal(res.pending);
@@ -761,7 +762,7 @@ export default function CatchGame({
       </div>
 
       {/* hint / messages */}
-      {status === "ready" && (toast || !hintGone || blink) && !modal && !pendingModal && (
+      {status === "ready" && (toast || !hintGone || (facesSeen > 0 && facesFrontal === 0)) && !modal && !pendingModal && (
         <div
           style={{
             position: "absolute",
@@ -773,15 +774,13 @@ export default function CatchGame({
             justifyContent: "center",
           }}
         >
-          <div className="dialog pop" key={toast || blink || "hint"} style={{ maxWidth: 440, width: "100%", fontSize: 15 }}>
+          <div className="dialog pop" key={toast || (facesFrontal ? "hint" : "side")} style={{ maxWidth: 440, width: "100%", fontSize: 15 }}>
             {toast ||
-              (blink === "watching"
-                ? "Blink check! Keep the camera on them, they need to blink..."
-                : blink === "ok"
-                  ? "Blink detected! Reading their face fingerprint..."
-                  : facesSeen
-                    ? "A builder appeared! Swipe the DevBall up at them. They'll need to blink!"
-                    : "Point your camera at another player...")}
+              (facesSeen && !facesFrontal
+                ? "They're side-on! Builders can only be caught face to face. Get them to look at you."
+                : facesSeen
+                  ? "A builder appeared! Swipe the DevBall up at them!"
+                  : "Point your camera at another player...")}
           </div>
         </div>
       )}
@@ -817,7 +816,7 @@ export default function CatchGame({
       {pendingModal && (
         <PendingModal pending={pendingModal} onContinue={closeModal} onQr={() => setQrFor(pendingModal)} />
       )}
-      {qrFor && <QrSheet inviter={inviter} photo={qrFor.photo} onClose={() => setQrFor(null)} />}
+      {qrFor && <QrSheet inviter={inviter} pending onClose={() => setQrFor(null)} />}
 
       {modal && (
         <CaughtModal
@@ -887,8 +886,7 @@ function CaughtModal({ entry, fresh, onContinue, onOpen }: { entry: DexEntry; fr
                 displayName={entry.displayName}
                 type={entry.type}
                 caught
-                hasPhoto={entry.hasPhoto}
-                caughtAt={entry.caughtAt}
+                avatar={entry.avatar}
               />
             </div>
             <div className="row spread" style={{ marginTop: 12 }}>
@@ -947,8 +945,9 @@ function PendingModal({ pending, onContinue, onQr }: { pending: Pending; onConti
               <span style={{ color: "#2f2c9e" }}>PENDING</span>
             </div>
             <div style={{ display: "flex", justifyContent: "center", position: "relative" }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={pending.photo} alt="" style={{ width: 190, height: 190, borderRadius: 10, objectFit: "cover", filter: "saturate(.6)" }} />
+              <div style={{ width: 170, height: 170, borderRadius: 10, background: "rgba(255,255,255,.4)" }}>
+                <Silhouette />
+              </div>
               <span
                 className="px"
                 style={{
@@ -968,7 +967,7 @@ function PendingModal({ pending, onContinue, onQr }: { pending: Pending; onConti
               Unknown builder
             </div>
             <div className="center small" style={{ opacity: 0.75 }}>
-              Saved on this phone only
+              Seen {new Date(pending.at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })} · waiting for them to join
             </div>
           </div>
         </div>

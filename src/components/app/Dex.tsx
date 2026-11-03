@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import type { AppState } from "@/lib/types";
 import type { Pending } from "@/lib/pending";
 import { DevBall } from "../DevBall";
-import { Icon, Lid, Portrait, TypeBadge } from "../ui";
+import { Icon, Lid, Portrait, Silhouette, TypeBadge } from "../ui";
 
 type Filter = "all" | "caught" | "missing";
 
@@ -90,12 +90,13 @@ export default function Dex({
                       ???
                     </span>
                     <span className="portrait" style={{ width: 44, height: 44, borderRadius: 10 }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={p.photo} alt="" style={{ filter: "saturate(.6)" }} />
+                      <Silhouette />
                     </span>
                     <span className="dex-name">
                       Unknown builder
-                      <small>Pending: joins soon?</small>
+                      <small>
+                        Pending · seen {new Date(p.at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+                      </small>
                     </span>
                     <span className="px" style={{ fontSize: 14, width: 20, textAlign: "center" }}>
                       ?
@@ -117,9 +118,8 @@ export default function Dex({
                       username={e.username}
                       displayName={e.displayName}
                       type={e.type}
-                      caught={e.caught}
-                      hasPhoto={e.hasPhoto}
-                      caughtAt={e.caughtAt}
+                      caught={e.caught || e.isMe}
+                      avatar={e?.avatar}
                     />
                     <span className="dex-name">
                       {known ? e.displayName : "- - - - -"}

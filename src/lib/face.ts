@@ -49,26 +49,48 @@ export function loadFace(): Promise<FaceApi> {
 
 export type Box = { x: number; y: number; width: number; height: number };
 
+type Pt = { x: number; y: number };
+const mean = (pts: Pt[]) => ({ x: pts.reduce((a, p) => a + p.x, 0) / pts.length, y: pts.reduce((a, p) => a + p.y, 0) / pts.length });
+
 /**
- * Detection of all faces (boxes only) for live tracking. Uses the fast tiny detector, and when it
- * sees nothing, falls back to the slower but more robust SSD detector.
+ * How directly a face looks at the camera, from its 68 landmarks: 1 = straight on, 0 = side profile.
+ * Projects the nose tip onto the line between the eyes; turning the head pushes it towards one eye.
+ * Measuring along the eye line makes it ignore head tilt.
  */
-export async function detectBoxes(input: HTMLVideoElement | HTMLCanvasElement): Promise<Box[]> {
+export function frontalScore(positions: Pt[]): number {
+  const nose = positions[30];
+  const le = mean(positions.slice(36, 42));
+  const re = mean(positions.slice(42, 48));
+  const ex = re.x - le.x;
+  const ey = re.y - le.y;
+  const len2 = ex * ex + ey * ey;
+  if (len2 < 1) return 0;
+  const t = ((nose.x - le.x) * ex + (nose.y - le.y) * ey) / len2; // 0 = at left eye, 1 = at right eye
+  if (t <= 0 || t >= 1) return 0;
+  return Math.min(t, 1 - t) / Math.max(t, 1 - t);
+}
+
+export type TrackedFace = Box & { frontal: number };
+
+/**
+ * Detection of all faces for live tracking, with how face-on each one is. Uses the fast tiny
+ * detector, and when it sees nothing, falls back to the slower but more robust SSD detector.
+ */
+export async function detectBoxes(input: HTMLVideoElement | HTMLCanvasElement): Promise<TrackedFace[]> {
   const faceapi = await loadFace();
-  let res = await faceapi.detectAllFaces(
-    input,
-    new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.3 }),
-  );
+  let res = await faceapi
+    .detectAllFaces(input, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.3 }))
+    .withFaceLandmarks();
   if (res.length === 0) {
-    res = await faceapi.detectAllFaces(input, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.4 }));
+    res = await faceapi.detectAllFaces(input, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.4 })).withFaceLandmarks();
   }
-  return res.map((d) => {
-    const b = d.box;
-    return { x: b.x, y: b.y, width: b.width, height: b.height };
+  return res.map((r) => {
+    const b = r.detection.box;
+    return { x: b.x, y: b.y, width: b.width, height: b.height, frontal: frontalScore(r.landmarks.positions) };
   });
 }
 
-/** Accurate detection + 128-number face descriptors. */
+/** Accurate detection + 128-number face descriptors, with how face-on each face is. */
 export async function describeFaces(input: HTMLVideoElement | HTMLCanvasElement) {
   const faceapi = await loadFace();
   const res = await faceapi
@@ -78,6 +100,7 @@ export async function describeFaces(input: HTMLVideoElement | HTMLCanvasElement)
   return res.map((r) => ({
     box: { x: r.detection.box.x, y: r.detection.box.y, width: r.detection.box.width, height: r.detection.box.height },
     score: r.detection.score,
+    frontal: frontalScore(r.landmarks.positions),
     descriptor: Array.from(r.descriptor),
   }));
 }
@@ -141,128 +164,4 @@ export function cameraErrorMessage(e: unknown) {
   if (name === "NotAllowedError") return "Camera permission was blocked. Allow camera access in your browser settings and reload.";
   if (name === "NotFoundError") return "No camera found on this device.";
   return (e as Error)?.message || "Couldn't start the camera.";
-}
-
-/* ---------------- liveness (blink check) ---------------- */
-
-type Landmarker = import("@mediapipe/tasks-vision").FaceLandmarker;
-let blinkLoading: Promise<Landmarker> | null = null;
-
-/**
- * MediaPipe Face Landmarker, used only for its blink scores (eyeBlinkLeft/Right).
- * face-api's landmarks don't respond reliably to closed eyes, MediaPipe's blendshapes do.
- */
-export function loadBlink(): Promise<Landmarker> {
-  if (!blinkLoading) {
-    blinkLoading = (async () => {
-      const { FaceLandmarker, FilesetResolver } = await import("@mediapipe/tasks-vision");
-      const fileset = await FilesetResolver.forVisionTasks("/mediapipe");
-      const make = (delegate: "GPU" | "CPU") =>
-        FaceLandmarker.createFromOptions(fileset, {
-          baseOptions: { modelAssetPath: "/models/face_landmarker.task", delegate },
-          outputFaceBlendshapes: true,
-          runningMode: "IMAGE",
-          numFaces: 1,
-        });
-      const lm = await make("GPU").catch(() => make("CPU"));
-      // warm-up
-      const c = document.createElement("canvas");
-      c.width = c.height = 64;
-      try {
-        lm.detect(c);
-      } catch {
-        /* ignore */
-      }
-      return lm;
-    })().catch((e) => {
-      blinkLoading = null;
-      throw e;
-    });
-  }
-  return blinkLoading;
-}
-
-/**
- * Watch a face in the live video and resolve true as soon as it blinks.
- * A printed photo or a face on another screen never blinks, so it never passes.
- * `center` is the target's position in video pixels; the watcher follows the face as it moves.
- * The face is cropped and enlarged before analysis, so it also works from a few metres away.
- */
-export async function watchForBlink(
-  video: HTMLVideoElement,
-  center: { x: number; y: number },
-  size: number,
-  timeoutMs: number,
-): Promise<boolean> {
-  const [faceapi, lm] = await Promise.all([loadFace(), loadBlink()]);
-  const start = performance.now();
-  let c = { ...center };
-  let side = size * 1.9;
-  let open = -1; // baseline blink score with eyes open
-  const crop = document.createElement("canvas");
-  crop.width = crop.height = 256;
-  const cctx = crop.getContext("2d")!;
-
-  let lost = 0;
-  while (performance.now() - start < timeoutMs) {
-    cctx.drawImage(video, c.x - side / 2, c.y - side / 2, side, side, 0, 0, 256, 256);
-    let score = -1;
-    try {
-      const r = lm.detect(crop);
-      const cats = r.faceBlendshapes?.[0]?.categories;
-      const pts = r.faceLandmarks?.[0];
-      if (cats && pts) {
-        const get = (k: string) => cats.find((x) => x.categoryName === k)?.score ?? 0;
-        score = (get("eyeBlinkLeft") + get("eyeBlinkRight")) / 2;
-        // Follow the face using MediaPipe's own landmarks (cheap, no extra detector pass).
-        let x0 = 1, y0 = 1, x1 = 0, y1 = 0;
-        for (const p of pts) {
-          if (p.x < x0) x0 = p.x;
-          if (p.y < y0) y0 = p.y;
-          if (p.x > x1) x1 = p.x;
-          if (p.y > y1) y1 = p.y;
-        }
-        const ox = c.x - side / 2;
-        const oy = c.y - side / 2;
-        c = { x: ox + ((x0 + x1) / 2) * side, y: oy + ((y0 + y1) / 2) * side };
-        side = Math.max(Math.max(x1 - x0, y1 - y0) * side * 1.9, 48);
-        lost = 0;
-      } else {
-        lost++;
-      }
-    } catch {
-      lost++;
-    }
-
-    // Lost the face in the crop: re-acquire it with the face detector.
-    if (lost >= 2) {
-      try {
-        const boxes = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.3 }));
-        let bestD = Infinity;
-        for (const d of boxes) {
-          const b = d.box;
-          const dd = Math.hypot(b.x + b.width / 2 - c.x, b.y + b.height / 2 - c.y);
-          if (dd < bestD && dd < Math.max(b.width, 80) * 2) {
-            bestD = dd;
-            c = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
-            side = Math.max(b.width, b.height) * 1.9;
-          }
-        }
-      } catch {
-        /* keep last position */
-      }
-      lost = 0;
-    }
-
-    // Debug trace for automated tests (cheap, bounded).
-    const dbg = (window as unknown as { __blinkTrace?: number[] }).__blinkTrace;
-    if (dbg && dbg.length < 200) dbg.push(Math.round(score * 1000) / 1000);
-    if (score >= 0) {
-      if (open >= 0 && score > 0.35 && score - open > 0.18) return true;
-      // Baseline follows the open-eye level, ignoring partial closures.
-      open = open < 0 ? score : score < open ? score : open * 0.9 + score * 0.1;
-    }
-    await new Promise((r) => requestAnimationFrame(() => r(null)));
-  }
-  return false;
 }
