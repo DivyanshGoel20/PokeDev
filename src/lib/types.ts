@@ -52,7 +52,10 @@ export type Me = {
   rank: number;
 };
 
-export type AppState = { me: Me; dex: DexEntry[]; ranks: RankRow[] };
+/** Someone who caught you. If you've caught them too, `no` points to their dex entry. */
+export type CaughtBy = { displayName: string; username: string; type: DevType; at: string; no: number; caughtBack: boolean };
+
+export type AppState = { me: Me; dex: DexEntry[]; ranks: RankRow[]; caughtBy: CaughtBy[] };
 
 export function trainerLevel(catches: number) {
   return 1 + Math.floor(Math.sqrt(catches * 2));

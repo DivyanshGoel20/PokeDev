@@ -1,37 +1,24 @@
 import { NextResponse } from "next/server";
-import { q } from "@/lib/db";
 import { getUser } from "@/lib/auth";
-import { cleanDescriptor, cleanPhoto, nearestFaces } from "@/lib/users";
-import { MATCH_MARGIN, MATCH_THRESHOLD } from "@/lib/types";
+import { cleanDescriptor } from "@/lib/users";
+import { tryCatch } from "@/lib/catching";
+import { rateLimit } from "@/lib/ratelimit";
 
 /**
  * Match a face seen through the camera against registered players.
- * The descriptor and snapshot are only kept when they match a registered, catchable player;
- * anything else is discarded.
+ * Only the 128-number descriptor is sent here, never a photo: the snapshot is uploaded
+ * separately (to /api/catch/photo) and only after a successful match.
  */
 export async function POST(req: Request) {
   const me = await getUser();
   if (!me) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   if (!me.has_face) return NextResponse.json({ error: "Scan your own face first" }, { status: 403 });
+  const limited = await rateLimit(`catch:${me.id}`, 40, 60);
+  if (limited) return limited;
 
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   const descriptor = cleanDescriptor(body.descriptor);
   if (!descriptor) return NextResponse.json({ error: "Bad face data" }, { status: 400 });
-  const photo = cleanPhoto(body.photo);
 
-  const [best, runnerUp] = await nearestFaces(descriptor, 2);
-  if (!best || Number(best.dist) > MATCH_THRESHOLD) return NextResponse.json({ result: "nomatch" });
-  // Two players look almost equally similar: don't guess, ask for a closer look.
-  if (runnerUp && Number(runnerUp.dist) - Number(best.dist) < MATCH_MARGIN) return NextResponse.json({ result: "unclear" });
-  if (best.id === me.id) return NextResponse.json({ result: "self" });
-  if (!best.catchable) return NextResponse.json({ result: "hidden" });
-
-  const inserted = await q(
-    `INSERT INTO catches (catcher_id, caught_id, photo) VALUES ($1, $2, $3)
-     ON CONFLICT (catcher_id, caught_id) DO UPDATE SET photo = COALESCE(catches.photo, EXCLUDED.photo)
-     RETURNING (xmax = 0) AS fresh`,
-    [me.id, best.id, photo],
-  );
-  const fresh = (inserted[0] as { fresh?: boolean } | undefined)?.fresh;
-  return NextResponse.json({ result: fresh ? "caught" : "already", username: best.username });
+  return NextResponse.json(await tryCatch(me.id, descriptor));
 }

@@ -1,13 +1,15 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { cameraErrorMessage, coverMap, describeFaces, detectBoxes, loadFace, startCamera, stopCamera, type Box } from "@/lib/face";
+import { cameraErrorMessage, coverMap, describeFaces, detectBoxes, loadFace, startCamera, stopCamera, watchForBlink, type Box } from "@/lib/face";
+import { addPending, type Pending } from "@/lib/pending";
+import QrSheet from "./QrSheet";
 import { postJSON } from "@/lib/client";
 import { sfx } from "@/lib/sfx";
 import { typeInfo, type DexEntry } from "@/lib/types";
 import { Icon, Portrait, TypeBadge, dexNo } from "./ui";
 import { DevBall } from "./DevBall";
 
-type CatchResult = "caught" | "already" | "nomatch" | "hidden" | "self" | "unclear" | "error";
+type CatchResult = "caught" | "already" | "nomatch" | "hidden" | "self" | "unclear" | "nolive" | "error";
 type ApiResult = { result?: CatchResult; username?: string; error?: string };
 
 type Particle = { x: number; y: number; vx: number; vy: number; life: number; max: number; color: string; size: number; star?: boolean };
@@ -35,16 +37,20 @@ const MESSAGES: Record<Exclude<CatchResult, "caught" | "already">, string> = {
   hidden: "This builder is in hide mode right now. Try again later!",
   self: "That's you! You can't catch yourself.",
   unclear: "Couldn't get a clear look. Get a bit closer and try again!",
+  nolive: "It broke free! The blink check failed. Real builders blink, photos don't. Try again and catch them mid-blink!",
   error: "Signal lost! Check your connection and try again.",
 };
 
 export default function CatchGame({
   caughtCount,
+  inviter,
   onClose,
   onCaught,
   onOpenEntry,
 }: {
   caughtCount: number;
+  /** Your username, used in the invite QR code. */
+  inviter: string;
   onClose: () => void;
   /** Refreshes app state and returns the caught player's entry. */
   onCaught: (username: string) => Promise<DexEntry | null>;
@@ -58,6 +64,9 @@ export default function CatchGame({
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
   const [modal, setModal] = useState<{ entry: DexEntry; fresh: boolean } | null>(null);
+  const [pendingModal, setPendingModal] = useState<Pending | null>(null);
+  const [qrFor, setQrFor] = useState<Pending | null>(null);
+  const [blink, setBlink] = useState<"watching" | "ok" | null>(null);
   const [facesSeen, setFacesSeen] = useState(0);
   const [hintGone, setHintGone] = useState(false);
 
@@ -67,7 +76,7 @@ export default function CatchGame({
     particles: [] as Particle[],
     flash: 0,
     trail: [] as { x: number; y: number; t: number }[],
-    result: null as (ApiResult & { entry?: DexEntry | null }) | null,
+    result: null as (ApiResult & { entry?: DexEntry | null; pending?: Pending }) | null,
     tracking: true,
     mirrored: false,
     modalOpen: false,
@@ -148,10 +157,18 @@ export default function CatchGame({
       snap.height = v.videoHeight;
       snap.getContext("2d")!.drawImage(v, 0, 0);
       g.current.tracking = false;
+      const tcx = target.x + target.width / 2;
+      const tcy = target.y + target.height / 2;
       try {
+        // 1) Liveness: the target has to blink while the ball is in the air / wobbling.
+        setBlink("watching");
+        const blinkP = watchForBlink(v, { x: tcx, y: tcy }, Math.max(target.width, target.height), 5500).then((ok) => {
+          if (ok) setBlink("ok");
+          return ok;
+        });
+
+        // 2) Face fingerprint of the person we aimed at, from the snapshot at the throw.
         const faces = await describeFaces(snap);
-        const tcx = target.x + target.width / 2;
-        const tcy = target.y + target.height / 2;
         let best: (typeof faces)[number] | null = null;
         let bestD = Infinity;
         for (const f of faces) {
@@ -162,10 +179,12 @@ export default function CatchGame({
           }
         }
         if (!best || bestD > Math.max(target.width, 60)) {
+          await blinkP;
           g.current.result = { result: "unclear" };
           return;
         }
-        // Head-and-shoulders snapshot of the caught player, for the catcher's PokeDev.
+
+        // Head-and-shoulders snapshot from the moment of the throw.
         const b = best.box;
         const side = Math.min(Math.max(b.width, b.height) * 2.1, snap.width, snap.height);
         const sx = Math.min(Math.max(b.x + b.width / 2 - side / 2, 0), snap.width - side);
@@ -180,12 +199,22 @@ export default function CatchGame({
         octx.drawImage(snap, sx, sy, side, side, 0, 0, 360, 360);
         const photo = out.toDataURL("image/jpeg", 0.82);
 
-        const r = await postJSON<ApiResult>("/api/catch", { descriptor: best.descriptor, photo });
+        if (!(await blinkP)) {
+          g.current.result = { result: "nolive" };
+          return;
+        }
+
+        // 3) Match. Only the 128 numbers are sent here; the photo is uploaded only after a match.
+        const r = await postJSON<ApiResult>("/api/catch", { descriptor: best.descriptor });
         if (r.error) {
           g.current.result = { result: "error", error: r.error };
         } else if ((r.result === "caught" || r.result === "already") && r.username) {
+          await postJSON("/api/catch/photo", { username: r.username, photo });
           const entry = await onCaught(r.username);
           g.current.result = { ...r, entry };
+        } else if (r.result === "nomatch") {
+          // Not a player yet: keep them as a pending entry on THIS phone only.
+          g.current.result = { result: "nomatch", pending: addPending(best.descriptor, photo) };
         } else {
           g.current.result = r;
         }
@@ -570,6 +599,7 @@ export default function CatchGame({
             const res = S.result!;
             S.ball = { k: "idle", t0: now };
             S.modalOpen = true;
+            setBlink(null);
             setModal({ entry: res.entry!, fresh: res.result === "caught" });
           }
           break;
@@ -581,7 +611,13 @@ export default function CatchGame({
           ctx.globalAlpha = 1;
           if (t >= 1) {
             const res = S.result;
-            showToast(MESSAGES[(res?.result as keyof typeof MESSAGES) ?? "error"] ?? MESSAGES.error);
+            setBlink(null);
+            if (res?.result === "nomatch" && res.pending) {
+              S.modalOpen = true;
+              setPendingModal(res.pending);
+            } else {
+              showToast(MESSAGES[(res?.result as keyof typeof MESSAGES) ?? "error"] ?? MESSAGES.error);
+            }
             S.ball = { k: "idle", t0: now };
           }
           break;
@@ -641,6 +677,7 @@ export default function CatchGame({
 
   function closeModal() {
     setModal(null);
+    setPendingModal(null);
     g.current.modalOpen = false;
   }
 
@@ -724,7 +761,7 @@ export default function CatchGame({
       </div>
 
       {/* hint / messages */}
-      {status === "ready" && (toast || !hintGone) && (
+      {status === "ready" && (toast || !hintGone || blink) && !modal && !pendingModal && (
         <div
           style={{
             position: "absolute",
@@ -736,8 +773,15 @@ export default function CatchGame({
             justifyContent: "center",
           }}
         >
-          <div className="dialog pop" key={toast || "hint"} style={{ maxWidth: 440, width: "100%", fontSize: 15 }}>
-            {toast || (facesSeen ? "A builder appeared! Swipe the DevBall up at them!" : "Point your camera at another player...")}
+          <div className="dialog pop" key={toast || blink || "hint"} style={{ maxWidth: 440, width: "100%", fontSize: 15 }}>
+            {toast ||
+              (blink === "watching"
+                ? "Blink check! Keep the camera on them, they need to blink..."
+                : blink === "ok"
+                  ? "Blink detected! Reading their face fingerprint..."
+                  : facesSeen
+                    ? "A builder appeared! Swipe the DevBall up at them. They'll need to blink!"
+                    : "Point your camera at another player...")}
           </div>
         </div>
       )}
@@ -769,6 +813,11 @@ export default function CatchGame({
           </div>
         </div>
       )}
+
+      {pendingModal && (
+        <PendingModal pending={pendingModal} onContinue={closeModal} onQr={() => setQrFor(pendingModal)} />
+      )}
+      {qrFor && <QrSheet inviter={inviter} photo={qrFor.photo} onClose={() => setQrFor(null)} />}
 
       {modal && (
         <CaughtModal
@@ -871,6 +920,75 @@ function CaughtModal({ entry, fresh, onContinue, onOpen }: { entry: DexEntry; fr
             Keep catching
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function PendingModal({ pending, onContinue, onQr }: { pending: Pending; onContinue: () => void; onQr: () => void }) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 5,
+        background: "rgba(20,20,24,.72)",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "flex-end",
+        padding: "calc(env(safe-area-inset-top) + 16px) 14px calc(env(safe-area-inset-bottom) + 16px)",
+      }}
+    >
+      <div style={{ maxWidth: 460, width: "100%", margin: "0 auto" }}>
+        <div className="bezel pop" style={{ marginBottom: 14 }}>
+          <div className="lcd" style={{ padding: 10 }}>
+            <div className="row spread px" style={{ fontSize: 10, marginBottom: 10 }}>
+              <span>No.???</span>
+              <span style={{ color: "#a8161b" }}>PENDING</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "center", position: "relative" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={pending.photo} alt="" style={{ width: 190, height: 190, borderRadius: 10, objectFit: "cover", filter: "saturate(.6)" }} />
+              <span
+                className="px"
+                style={{
+                  position: "absolute",
+                  bottom: -10,
+                  background: "var(--ink)",
+                  color: "#fff",
+                  borderRadius: 8,
+                  padding: "6px 10px",
+                  fontSize: 14,
+                }}
+              >
+                ?
+              </span>
+            </div>
+            <div className="center" style={{ fontWeight: 700, fontSize: 19, marginTop: 18 }}>
+              Unknown builder
+            </div>
+            <div className="center small" style={{ opacity: 0.75 }}>
+              Saved on this phone only
+            </div>
+          </div>
+        </div>
+
+        <div className="dialog">
+          Oh no, they got away! This builder isn&apos;t on PokeDev yet. We saved them as a pending entry, and the moment they join
+          they&apos;ll land in your PokeDev automatically.
+        </div>
+
+        <button
+          onClick={onQr}
+          className="btn btn-yellow"
+          style={{ marginTop: 14, justifyContent: "space-between" }}
+        >
+          <span>Show them your QR code to join</span>
+          <span>→</span>
+        </button>
+        <button className="btn" style={{ marginTop: 10 }} onClick={onContinue}>
+          Keep catching
+        </button>
       </div>
     </div>
   );

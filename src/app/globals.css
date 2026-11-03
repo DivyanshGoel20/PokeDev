@@ -936,3 +936,9 @@ h3 {
     animation-iteration-count: 1 !important;
   }
 }
+
+.qr svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

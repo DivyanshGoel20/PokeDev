@@ -31,6 +31,11 @@ CREATE TABLE IF NOT EXISTS catches (
 );
 CREATE INDEX IF NOT EXISTS catches_caught_idx ON catches(caught_id);
 ALTER TABLE catches ADD COLUMN IF NOT EXISTS photo TEXT;
+CREATE TABLE IF NOT EXISTS rate_limits (
+  key TEXT PRIMARY KEY,
+  window_start TIMESTAMPTZ NOT NULL,
+  hits INTEGER NOT NULL
+);
 `;
 
 declare global {

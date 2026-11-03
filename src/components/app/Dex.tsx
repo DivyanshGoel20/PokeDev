@@ -1,12 +1,23 @@
 "use client";
 import { useMemo, useState } from "react";
 import type { AppState } from "@/lib/types";
+import type { Pending } from "@/lib/pending";
 import { DevBall } from "../DevBall";
 import { Icon, Lid, Portrait, TypeBadge } from "../ui";
 
 type Filter = "all" | "caught" | "missing";
 
-export default function Dex({ state, onEntry }: { state: AppState; onEntry: (no: number) => void }) {
+export default function Dex({
+  state,
+  pending,
+  onEntry,
+  onPending,
+}: {
+  state: AppState;
+  pending: Pending[];
+  onEntry: (no: number) => void;
+  onPending: (id: string) => void;
+}) {
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const others = state.dex.filter((e) => !e.isMe);
@@ -69,6 +80,28 @@ export default function Dex({ state, onEntry }: { state: AppState; onEntry: (no:
             </div>
 
             <div className="dex-list">
+              {filter !== "caught" &&
+                !query &&
+                pending.map((p) => (
+                  <button key={p.id} className="dex-row" onClick={() => onPending(p.id)} style={{ borderStyle: "dashed" }}>
+                    <span className="dex-no">
+                      No.
+                      <br />
+                      ???
+                    </span>
+                    <span className="portrait" style={{ width: 44, height: 44, borderRadius: 10 }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={p.photo} alt="" style={{ filter: "saturate(.6)" }} />
+                    </span>
+                    <span className="dex-name">
+                      Unknown builder
+                      <small>Pending: joins soon?</small>
+                    </span>
+                    <span className="px" style={{ fontSize: 14, width: 20, textAlign: "center" }}>
+                      ?
+                    </span>
+                  </button>
+                ))}
               {rows.map((e) => {
                 const known = e.caught || e.isMe;
                 return (

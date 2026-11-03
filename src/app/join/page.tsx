@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { postJSON } from "@/lib/client";
 import { Lid } from "@/components/ui";
 import { ProfileFields, emptyProfile, type Profile } from "@/components/ProfileFields";
@@ -11,6 +11,14 @@ export default function Join() {
   const [profile, setProfile] = useState<Profile>(emptyProfile);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [ref, setRef] = useState("");
+  const [tried, setTried] = useState(false);
+
+  useEffect(() => {
+    const r = new URLSearchParams(window.location.search).get("ref") ?? "";
+    setRef(r.replace(/[^a-z0-9_]/gi, "").slice(0, 20));
+    setTried(new URLSearchParams(window.location.search).get("t") === "1");
+  }, []);
 
   function next(e: React.FormEvent) {
     e.preventDefault();
@@ -54,7 +62,11 @@ export default function Join() {
         {step === 0 ? (
           <form onSubmit={next} className="screen" key="s0">
             <div className="dialog" style={{ marginBottom: 22 }}>
-              Hi there, future trainer! First things first: what should we call you?
+              {ref && !tried
+                ? `@${ref} invited you to PokeDev! First things first: what should we call you?`
+                : ref
+                ? `@${ref} tried to catch you, but you're not in the game yet! Join now and they'll get you automatically. First, pick a username.`
+                : "Hi there, future trainer! First things first: what should we call you?"}
             </div>
             {error && <div className="error">{error}</div>}
             <div className="field">

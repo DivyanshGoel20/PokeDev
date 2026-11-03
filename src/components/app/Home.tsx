@@ -8,11 +8,13 @@ export default function Home({
   state,
   onCatch,
   onEntry,
+  onInvite,
   setTab,
 }: {
   state: AppState;
   onCatch: () => void;
   onEntry: (no: number) => void;
+  onInvite: () => void;
   setTab: (t: Tab) => void;
 }) {
   const { me, dex } = state;
@@ -189,6 +191,54 @@ export default function Home({
             ))}
           </div>
         )}
+
+        {/* caught by */}
+        {state.caughtBy.length > 0 && (
+          <>
+            <div className="section-label">
+              <span>Caught by</span>
+              <span>{state.caughtBy.length}</span>
+            </div>
+            <div className="panel" style={{ padding: "4px 14px" }}>
+              {state.caughtBy.slice(0, 6).map((c, i) => (
+                <div
+                  key={c.username}
+                  className="row"
+                  style={{ padding: "10px 0", borderTop: i ? "1.5px dashed var(--line)" : "none" }}
+                >
+                  <Portrait size={38} radius={10} displayName={c.displayName} username={c.username} type={c.type} caught />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {c.displayName} caught you
+                    </div>
+                    <div className="small muted">
+                      {new Date(c.at).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" })}
+                    </div>
+                  </div>
+                  {c.caughtBack ? (
+                    <button className="btn btn-sm btn-quiet" onClick={() => onEntry(c.no)}>
+                      View
+                    </button>
+                  ) : (
+                    <button className="btn btn-sm btn-red" onClick={onCatch}>
+                      Catch back
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* invite */}
+        <button
+          onClick={onInvite}
+          className="btn btn-yellow"
+          style={{ marginTop: 22, justifyContent: "space-between" }}
+        >
+          <span>Invite a builder with your QR code</span>
+          <span>→</span>
+        </button>
 
         {/* types */}
         <div className="section-label">

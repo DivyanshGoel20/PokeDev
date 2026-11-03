@@ -5,7 +5,7 @@ import { postJSON } from "@/lib/client";
 import { Lid, Portrait, TypeBadge } from "../ui";
 import { ProfileFields, type Profile } from "../ProfileFields";
 
-export default function Trainer({ state, refresh }: { state: AppState; refresh: () => Promise<unknown> }) {
+export default function Trainer({ state, refresh, onInvite }: { state: AppState; refresh: () => Promise<unknown>; onInvite: () => void }) {
   const { me, dex } = state;
   const [catchable, setCatchable] = useState(me.catchable);
   const [editing, setEditing] = useState(false);
@@ -155,9 +155,14 @@ export default function Trainer({ state, refresh }: { state: AppState; refresh: 
                 </div>
               </div>
             </div>
-            <button className="btn" style={{ marginTop: 16 }} onClick={() => setEditing(true)}>
-              Edit card
-            </button>
+            <div className="row" style={{ marginTop: 16 }}>
+              <button className="btn" onClick={() => setEditing(true)}>
+                Edit card
+              </button>
+              <button className="btn btn-yellow" onClick={onInvite}>
+                My QR code
+              </button>
+            </div>
           </>
         )}
 

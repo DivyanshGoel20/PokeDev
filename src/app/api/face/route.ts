@@ -3,11 +3,14 @@ import { q } from "@/lib/db";
 import { getUser } from "@/lib/auth";
 import { cleanDescriptor, nearestFaces } from "@/lib/users";
 import { MATCH_THRESHOLD } from "@/lib/types";
+import { rateLimit } from "@/lib/ratelimit";
 
 /** Register (or replace) the signed-in player's face descriptor. Only the 128 numbers are stored. */
 export async function POST(req: Request) {
   const me = await getUser();
   if (!me) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  const limited = await rateLimit(`face:${me.id}`, 10, 600);
+  if (limited) return limited;
 
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   const descriptor = cleanDescriptor(body.descriptor);

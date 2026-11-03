@@ -1,6 +1,6 @@
 import "server-only";
 import { q } from "./db";
-import { TYPE_KEYS, type AppState, type DevType, type DexEntry, type RankRow } from "./types";
+import { TYPE_KEYS, type AppState, type CaughtBy, type DevType, type DexEntry, type RankRow } from "./types";
 
 type DexRaw = {
   id: number;
@@ -21,7 +21,7 @@ type DexRaw = {
 
 /** Everything the app needs, in one round of queries. */
 export async function buildState(meId: number): Promise<AppState | null> {
-  const [dexRows, rankRows] = await Promise.all([
+  const [dexRows, rankRows, byRows] = await Promise.all([
     q<DexRaw>(
       `SELECT u.id, u.username, u.display_name, u.building, u.type, u.x_handle, u.farcaster, u.telegram, u.catchable,
          row_number() OVER (ORDER BY u.id)::int AS no,
@@ -39,6 +39,14 @@ export async function buildState(meId: number): Promise<AppState | null> {
        FROM users u LEFT JOIN catches c ON c.catcher_id = u.id
        WHERE u.face IS NOT NULL
        GROUP BY u.id ORDER BY catches DESC, u.id ASC LIMIT 100`,
+    ),
+    q<{ id: number; username: string; display_name: string; type: string; at: string; caught_back: boolean }>(
+      `SELECT u.id, u.username, u.display_name, u.type, c.created_at AS at,
+         EXISTS (SELECT 1 FROM catches b WHERE b.catcher_id = $1 AND b.caught_id = u.id) AS caught_back
+       FROM catches c JOIN users u ON u.id = c.catcher_id
+       WHERE c.caught_id = $1
+       ORDER BY c.created_at DESC LIMIT 50`,
+      [meId],
     ),
   ]);
 
@@ -75,7 +83,18 @@ export async function buildState(meId: number): Promise<AppState | null> {
   const myCatches = Number(meRow.catch_count);
   const rank = 1 + ranks.filter((r) => r.catches > myCatches).length;
 
+  const noById = new Map(dexRows.map((r) => [r.id, r.no]));
+  const caughtBy: CaughtBy[] = byRows.map((r) => ({
+    displayName: r.display_name,
+    username: r.username,
+    type: r.type as DevType,
+    at: new Date(r.at).toISOString(),
+    no: noById.get(r.id) ?? 0,
+    caughtBack: !!r.caught_back,
+  }));
+
   return {
+    caughtBy,
     me: {
       no: meRow.no,
       username: meRow.username,
