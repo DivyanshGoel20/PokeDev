@@ -3,9 +3,14 @@
    red device shell · LCD screens · pixel type · flat colors
    ============================================================ */
 :root {
-  --red: #dc2b2b;
-  --red-dark: #a8161b;
-  --red-deep: #7c0f13;
+  /* Devcon 8 India palette: indigo shell, saffron, moon teal */
+  --red: #2f2c9e; /* primary brand (indigo); name kept for brevity */
+  --red-dark: #1e1b74;
+  --red-deep: #141155;
+  --danger: #d6403a;
+  --saffron: #f6a54c;
+  --teal: #6fd8d0;
+  --pink: #f39ac0;
   --ink: #1d1d22;
   --ink-2: #3b3b44;
   --paper: #f3efe6;
@@ -13,12 +18,12 @@
   --card: #fffdf8;
   --line: #ddd5c5;
   --muted: #847c6d;
-  --lcd: #c9dcb9;
-  --lcd-2: #b4cba2;
-  --lcd-ink: #22331d;
+  --lcd: #c4ebe4;
+  --lcd-2: #a9ded5;
+  --lcd-ink: #15393a;
   --screen: #1b2420;
   --blue: #3aa6f4;
-  --yellow: #ffcc33;
+  --yellow: #f6a54c;
   --green: #4cc76b;
   --radius: 18px;
   --tab-h: 74px;
@@ -98,6 +103,21 @@ h3 {
   padding: calc(var(--safe-t) + 14px) 16px 22px;
   border-bottom: 4px solid var(--red-dark);
   box-shadow: inset 0 -10px 0 -6px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+
+.lid::before {
+  /* faint mandala ring, a nod to Devcon 8 India's artwork */
+  content: "";
+  position: absolute;
+  right: -60px;
+  top: -70px;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  border: 2px dashed rgba(246, 165, 76, 0.35);
+  box-shadow: 0 0 0 14px rgba(255, 255, 255, 0.04), 0 0 0 30px rgba(246, 165, 76, 0.06);
+  pointer-events: none;
 }
 
 .lid::after {
@@ -105,7 +125,7 @@ h3 {
   content: "";
   position: absolute;
   right: 0;
-  bottom: -4px;
+  bottom: 0;
   width: 46%;
   height: 16px;
   background: var(--paper);
@@ -127,7 +147,7 @@ h3 {
   height: 52px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: radial-gradient(circle at 34% 30%, #d9f1ff 0 12%, #6cc3ff 13% 34%, #1f86d6 60%, #135a95 100%);
+  background: radial-gradient(circle at 34% 30%, #ffffff 0 12%, #b9f3ee 13% 34%, #5fd4c8 60%, #2c9e98 100%);
   border: 4px solid #fff;
   box-shadow: 0 0 0 3px var(--ink), 0 3px 0 3px rgba(0, 0, 0, 0.25);
 }
@@ -154,13 +174,13 @@ h3 {
 }
 
 .leds i:nth-child(1) {
-  background: #ff5a5a;
+  background: var(--saffron);
 }
 .leds i:nth-child(2) {
-  background: var(--yellow);
+  background: var(--pink);
 }
 .leds i:nth-child(3) {
-  background: var(--green);
+  background: var(--teal);
 }
 
 .lid-title {
@@ -305,9 +325,9 @@ h3 {
 }
 
 .btn-danger {
-  border-color: var(--red);
-  color: var(--red);
-  box-shadow: 0 3px 0 var(--red);
+  border-color: var(--danger);
+  color: var(--danger);
+  box-shadow: 0 3px 0 var(--danger);
   background: #fff5f4;
 }
 
@@ -388,7 +408,7 @@ h3 {
 .error {
   background: #fff1f0;
   border: 2px solid #f3b4b0;
-  color: var(--red-dark);
+  color: #a3231e;
   padding: 12px 14px;
   border-radius: 12px;
   font-size: 14px;

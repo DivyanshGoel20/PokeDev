@@ -5,6 +5,7 @@ import { buildState } from "@/lib/users";
 import { DevBall } from "@/components/DevBall";
 import { Lid } from "@/components/ui";
 import AppShell from "@/components/app/AppShell";
+import { DevconChip, Disclaimer, PrizeBanner } from "@/components/DevconBits";
 
 export const dynamic = "force-dynamic";
 
@@ -21,28 +22,44 @@ export default async function Home() {
 function Landing() {
   return (
     <>
-      <Lid title="POKEDEV" subtitle="Devcon edition" />
+      <Lid title="POKEDEV" subtitle="Catch every builder" />
       <main className="wrap plain">
         <div className="bezel screen" style={{ marginTop: 6 }}>
-          <div className="lcd center" style={{ padding: "30px 16px 26px" }}>
-            <DevBall size={120} className="bob" />
-            <h1 className="px" style={{ fontSize: 24, marginTop: 26, lineHeight: 1.3 }}>
+          <div style={{ borderRadius: 8, overflow: "hidden", position: "relative", background: "var(--red-deep)" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/devcon/devcon8-art.webp"
+              alt="Devcon 8 India"
+              style={{ width: "100%", aspectRatio: "16 / 10", objectFit: "cover", display: "block" }}
+            />
+            <div style={{ position: "absolute", left: 10, top: 10 }}>
+              <DevconChip height={26} />
+            </div>
+            <div style={{ position: "absolute", right: 12, bottom: -2 }}>
+              <DevBall size={84} className="bob" />
+            </div>
+          </div>
+          <div className="lcd center" style={{ padding: "22px 14px 20px", marginTop: 10 }}>
+            <h1 className="px" style={{ fontSize: 26, lineHeight: 1.3 }}>
               POKEDEV
             </h1>
-            <p style={{ margin: "14px 0 0", fontWeight: 600, fontSize: 16, lineHeight: 1.45 }}>
-              Gotta catch every builder.
-              <br />
-              Meet people, throw a DevBall, fill your dex.
+            <p style={{ margin: "12px 0 0", fontWeight: 700, fontSize: 18, lineHeight: 1.35 }}>Catch every builder at Devcon</p>
+            <p className="px" style={{ margin: "14px 0 0", fontSize: 10, lineHeight: 1.8 }}>
+              CATCH PEOPLE, NOT POKEMON.
             </p>
           </div>
         </div>
 
+        <div style={{ marginTop: 18 }}>
+          <PrizeBanner art={false} />
+        </div>
+
         <div className="stack" style={{ marginTop: 22 }}>
           <Link href="/join" className="btn btn-red">
-            New trainer
+            Start catching
           </Link>
           <Link href="/login" className="btn">
-            Continue
+            I already play
           </Link>
         </div>
 
@@ -57,7 +74,7 @@ function Landing() {
             </li>
             <li>
               <span className="num-dot">2</span>
-              <span>Spot another player, point your camera at them and swipe the DevBall.</span>
+              <span>Spot a builder in the halls, point your camera at them and swipe the DevBall. They have to blink to be caught.</span>
             </li>
             <li>
               <span className="num-dot">3</span>
@@ -78,6 +95,7 @@ function Landing() {
             <li>Hide mode any time. Deleting your account erases everything, including those snapshots.</li>
           </ul>
         </div>
+        <Disclaimer />
       </main>
     </>
   );

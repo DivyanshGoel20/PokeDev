@@ -1,6 +1,7 @@
 "use client";
 import type { AppState, RankRow } from "@/lib/types";
 import { Lid, Portrait, TypeBadge } from "../ui";
+import { PrizeBanner } from "../DevconBits";
 
 export default function Ranks({ state, onEntry }: { state: AppState; onEntry: (no: number) => void }) {
   const { ranks, dex, me } = state;
@@ -36,8 +37,11 @@ export default function Ranks({ state, onEntry }: { state: AppState; onEntry: (n
 
   return (
     <>
-      <Lid title="RANKS" subtitle="Top trainers at Devcon" />
+      <Lid title="RANKS" subtitle="PokeDev masters" />
       <main className="wrap">
+        <div style={{ marginBottom: 18 }}>
+          <PrizeBanner rank={me.catchCount ? me.rank : undefined} />
+        </div>
         {top.length > 0 && (
           <div className="podium">
             {podium.map((r, i) =>

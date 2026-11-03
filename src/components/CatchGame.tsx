@@ -391,7 +391,7 @@ export default function CatchGame({
         ctx.rotate(-open * 1.1);
         ctx.translate(r, 0);
       }
-      ctx.fillStyle = "#f04a3e";
+      ctx.fillStyle = "#f2553a";
       ctx.beginPath();
       ctx.arc(0, 0, r, Math.PI, Math.PI * 2);
       ctx.closePath();
@@ -420,7 +420,7 @@ export default function CatchGame({
         ctx.beginPath();
         ctx.arc(0, 0, r * 0.22, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = "#dc2b2b";
+        ctx.fillStyle = "#2f2c9e";
         ctx.beginPath();
         ctx.moveTo(0, -r * 0.13);
         ctx.lineTo(r * 0.1, 0);
@@ -580,7 +580,7 @@ export default function CatchGame({
               S.ball = { k: "click", t0: now, x: b.x, y: b.y, s: b.s };
             } else {
               sfx.fail();
-              burst(b.x, b.y, 44, ["#fff", "#ffd6d2", "#f04a3e"], 7);
+              burst(b.x, b.y, 44, ["#fff", "#ffd6d2", "#f2553a"], 7);
               S.ball = { k: "burst", t0: now, x: b.x, y: b.y, s: b.s };
             }
           }
@@ -753,7 +753,7 @@ export default function CatchGame({
           <DevBall size={16} />
           {caughtCount}
           <span style={{ width: 2, height: 14, background: "#ddd5c5" }} />
-          <span style={{ color: facesSeen ? "#dc2b2b" : "#847c6d" }}>{status === "ready" ? (facesSeen ? `${facesSeen} IN SIGHT` : "SEARCHING") : "..."}</span>
+          <span style={{ color: facesSeen ? "#2f2c9e" : "#847c6d" }}>{status === "ready" ? (facesSeen ? `${facesSeen} IN SIGHT` : "SEARCHING") : "..."}</span>
         </div>
         <button style={roundBtn} onClick={() => setFacing((f) => (f === "user" ? "environment" : "user"))} aria-label="Flip camera">
           <Icon.flip />
@@ -877,7 +877,7 @@ function CaughtModal({ entry, fresh, onContinue, onOpen }: { entry: DexEntry; fr
           <div className="lcd" style={{ padding: 10 }}>
             <div className="row spread px" style={{ fontSize: 10, marginBottom: 10 }}>
               <span>{dexNo(entry.no)}</span>
-              {fresh && <span style={{ color: "#a8161b" }}>NEW!</span>}
+              {fresh && <span style={{ color: "#2f2c9e" }}>NEW!</span>}
             </div>
             <div style={{ display: "flex", justifyContent: "center" }}>
               <Portrait
@@ -944,7 +944,7 @@ function PendingModal({ pending, onContinue, onQr }: { pending: Pending; onConti
           <div className="lcd" style={{ padding: 10 }}>
             <div className="row spread px" style={{ fontSize: 10, marginBottom: 10 }}>
               <span>No.???</span>
-              <span style={{ color: "#a8161b" }}>PENDING</span>
+              <span style={{ color: "#2f2c9e" }}>PENDING</span>
             </div>
             <div style={{ display: "flex", justifyContent: "center", position: "relative" }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}

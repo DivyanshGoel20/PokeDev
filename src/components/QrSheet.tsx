@@ -19,7 +19,7 @@ export default function QrSheet({ inviter, photo, onClose }: { inviter: string; 
 
   async function share() {
     try {
-      if (navigator.share) await navigator.share({ title: "PokeDev", text: "Join me on PokeDev and catch builders at Devcon!", url });
+      if (navigator.share) await navigator.share({ title: "PokeDev", text: "Catch people, not Pokémon. Join PokeDev and catch every builder at Devcon. Top 3 win a prize!", url });
       else await navigator.clipboard.writeText(url);
     } catch {
       /* user cancelled */
@@ -65,7 +65,9 @@ export default function QrSheet({ inviter, photo, onClose }: { inviter: string; 
             )}
             <div style={{ fontWeight: 700, fontSize: 22, lineHeight: 1.2 }}>Scan to join PokeDev</div>
             <div style={{ opacity: 0.9, marginTop: 6, fontSize: 15 }}>
-              {photo ? "Once they join, they'll be added to your PokeDev automatically." : "Point their phone camera at this code."}
+              {photo
+                ? "Once they join, they'll be added to your PokeDev automatically."
+                : "Catch every builder at Devcon. Top 3 PokeDev masters win a prize."}
             </div>
           </div>
 

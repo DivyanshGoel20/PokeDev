@@ -2,7 +2,7 @@
 export function BallIcon({ s }: { s: number }) {
   const b = s * 0.72;
   return (
-    <div style={{ width: s, height: s, display: "flex", alignItems: "center", justifyContent: "center", background: "#dc2b2b" }}>
+    <div style={{ width: s, height: s, display: "flex", alignItems: "center", justifyContent: "center", background: "#2f2c9e" }}>
       <div
         style={{
           width: b,
@@ -15,7 +15,7 @@ export function BallIcon({ s }: { s: number }) {
           position: "relative",
         }}
       >
-        <div style={{ flex: 1, background: "#f04a3e" }} />
+        <div style={{ flex: 1, background: "#f2553a" }} />
         <div style={{ height: s * 0.05, background: "#1d1d22" }} />
         <div style={{ flex: 1, background: "#fffdf8" }} />
         <div

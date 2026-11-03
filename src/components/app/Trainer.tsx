@@ -4,6 +4,7 @@ import { TYPES, TYPE_KEYS, trainerLevel, type AppState } from "@/lib/types";
 import { postJSON } from "@/lib/client";
 import { Lid, Portrait, TypeBadge } from "../ui";
 import { ProfileFields, type Profile } from "../ProfileFields";
+import { Disclaimer } from "../DevconBits";
 
 export default function Trainer({ state, refresh, onInvite }: { state: AppState; refresh: () => Promise<unknown>; onInvite: () => void }) {
   const { me, dex } = state;
@@ -120,7 +121,7 @@ export default function Trainer({ state, refresh, onInvite }: { state: AppState;
                 {[
                   ["CAUGHT", me.catchCount],
                   ["TIMES CAUGHT", me.caughtCount],
-                  ["RANK", `#${me.rank}`],
+                  ["RANK", me.catchCount ? `#${me.rank}` : "-"],
                 ].map(([l, v]) => (
                   <div key={l} style={{ padding: "12px 8px", textAlign: "center" }}>
                     <div className="px" style={{ fontSize: 14 }}>
@@ -160,7 +161,7 @@ export default function Trainer({ state, refresh, onInvite }: { state: AppState;
                 Edit card
               </button>
               <button className="btn btn-yellow" onClick={onInvite}>
-                My QR code
+                Invite a builder
               </button>
             </div>
           </>
@@ -202,6 +203,7 @@ export default function Trainer({ state, refresh, onInvite }: { state: AppState;
             Delete my account &amp; data
           </button>
         </div>
+        <Disclaimer />
       </main>
     </>
   );

@@ -3,6 +3,7 @@ import { TYPES, TYPE_KEYS, trainerLevel, type AppState } from "@/lib/types";
 import { DevBall } from "../DevBall";
 import { Lid, Portrait, TypeBadge, dexNo } from "../ui";
 import type { Tab } from "./AppShell";
+import { PrizeBanner } from "../DevconBits";
 
 export default function Home({
   state,
@@ -28,7 +29,7 @@ export default function Home({
 
   return (
     <>
-      <Lid title="POKEDEV" subtitle="Devcon edition" />
+      <Lid title="POKEDEV" subtitle="Catch every builder" />
       <main className="wrap">
         {/* trainer strip */}
         <div className="row" style={{ marginTop: 4 }}>
@@ -81,10 +82,14 @@ export default function Home({
           />
           <div style={{ padding: "20px 18px", display: "flex", alignItems: "center", gap: 14, position: "relative" }}>
             <div style={{ flex: 1 }}>
-              <div className="px" style={{ fontSize: 10, opacity: 0.85, letterSpacing: ".08em" }}>
-                {me.catchable ? "SCANNER READY" : "HIDE MODE ON"}
+              <div className="px" style={{ fontSize: 9, opacity: 0.85, letterSpacing: ".06em", lineHeight: 1.7 }}>
+                {me.catchable ? "CATCH EVERY BUILDER" : "HIDE MODE ON"}
               </div>
-              <div style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.1, margin: "8px 0 14px" }}>Catch builders</div>
+              <div style={{ fontSize: 25, fontWeight: 700, lineHeight: 1.1, margin: "8px 0 14px" }}>
+                Catch people,
+                <br />
+                not Pokémon.
+              </div>
               <span
                 style={{
                   display: "inline-flex",
@@ -106,6 +111,11 @@ export default function Home({
             <DevBall size={104} className="bob" />
           </div>
         </button>
+
+        {/* prize */}
+        <div style={{ marginTop: 16 }}>
+          <PrizeBanner rank={me.catchCount ? me.rank : undefined} onClick={() => setTab("ranks")} />
+        </div>
 
         {/* progress */}
         <div className="section-label">
@@ -142,7 +152,7 @@ export default function Home({
             <span>Times caught</span>
           </div>
           <div className="stat">
-            <b>#{me.rank}</b>
+            <b>{me.catchCount ? `#${me.rank}` : "-"}</b>
             <span>Rank</span>
           </div>
         </div>
