@@ -5,14 +5,24 @@ export function dexNo(n: number) {
   return `No.${String(n).padStart(3, "0")}`;
 }
 
-export function TypeBadge({ type, small }: { type: string; small?: boolean }) {
-  const t = typeInfo(type);
+export function TypeBadge({ type, type2, small }: { type: string; type2?: string | null; small?: boolean }) {
+  const one = (k: string) => {
+    const t = typeInfo(k);
+    return (
+      <span
+        key={k}
+        className="type"
+        style={{ background: t.color, color: t.fg, ...(small ? { minWidth: 0, padding: "3px 6px", fontSize: 8 } : null) }}
+      >
+        {t.label}
+      </span>
+    );
+  };
+  if (!type2) return one(type);
   return (
-    <span
-      className="type"
-      style={{ background: t.color, color: t.fg, ...(small ? { minWidth: 0, padding: "3px 6px", fontSize: 8 } : null) }}
-    >
-      {t.label}
+    <span style={{ display: "inline-flex", gap: small ? 4 : 6, flexWrap: "wrap" }}>
+      {one(type)}
+      {one(type2)}
     </span>
   );
 }

@@ -35,6 +35,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_at TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS links TEXT NOT NULL DEFAULT '[]';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_token TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS type2 TEXT;
 CREATE TABLE IF NOT EXISTS invites (
   token TEXT PRIMARY KEY,
   catcher_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -79,7 +80,7 @@ async function createRunner(): Promise<Runner> {
 
   // Cold starts: one cheap check instead of re-running every migration statement.
   const ready = await run(
-    `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'invite_token')
+    `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'type2')
         AND EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'rate_limits')
         AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'catches' AND column_name = 'photo')
         AS ok`,

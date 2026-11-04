@@ -4,9 +4,50 @@ import { cameraErrorMessage, coverMap, describeFaces, detectBoxes, distance, loa
 import QRCode from "qrcode";
 import { postJSON } from "@/lib/client";
 import { sfx } from "@/lib/sfx";
-import { FRONTAL_MIN, typeInfo, type DexEntry } from "@/lib/types";
+import { FRONTAL_MIN, builderTitle, type DexEntry } from "@/lib/types";
 import { Icon, Portrait, TypeBadge, dexNo } from "./ui";
 import { DevBall } from "./DevBall";
+
+type Track = TrackedFace & { id: number; seen: number };
+
+/**
+ * Follow faces between frames: match each detection to the nearest previous track, smooth its
+ * box (so targets glide instead of jumping), and keep a lost face for a moment so it doesn't flicker.
+ */
+let nextTrackId = 1;
+function updateTracks(prev: Track[], dets: TrackedFace[], now: number): Track[] {
+  const used = new Set<number>();
+  const out: Track[] = [];
+  for (const d of dets) {
+    let best: Track | null = null;
+    let bestD = Infinity;
+    for (const p of prev) {
+      if (used.has(p.id)) continue;
+      const dd = Math.hypot(p.x + p.width / 2 - (d.x + d.width / 2), p.y + p.height / 2 - (d.y + d.height / 2));
+      if (dd < Math.max(p.width, d.width) * 0.9 && dd < bestD) {
+        bestD = dd;
+        best = p;
+      }
+    }
+    if (best) {
+      used.add(best.id);
+      const a = 0.55;
+      out.push({
+        id: best.id,
+        x: best.x + (d.x - best.x) * a,
+        y: best.y + (d.y - best.y) * a,
+        width: best.width + (d.width - best.width) * a,
+        height: best.height + (d.height - best.height) * a,
+        frontal: d.frontal,
+        seen: now,
+      });
+    } else {
+      out.push({ ...d, id: nextTrackId++, seen: now });
+    }
+  }
+  for (const p of prev) if (!used.has(p.id) && now - p.seen < 500) out.push(p);
+  return out;
+}
 
 type CatchResult = "caught" | "already" | "nomatch" | "hidden" | "self" | "unclear" | "side" | "far" | "error";
 type ApiResult = { result?: CatchResult; username?: string; error?: string };
@@ -65,13 +106,15 @@ export default function CatchGame({
   const [toast, setToast] = useState("");
   const [modal, setModal] = useState<{ entry: DexEntry; fresh: boolean } | null>(null);
   const [notLive, setNotLive] = useState<{ token: string | null } | null>(null);
-  const [facesFrontal, setFacesFrontal] = useState(0);
+  const [locked, setLocked] = useState(false); // a target is locked on
+  const [focusFacing, setFocusFacing] = useState(true); // ...and it's face-on
   const [lonely, setLonely] = useState(false); // no face found for a while
-  const [facesSeen, setFacesSeen] = useState(0);
+
   const [hintGone, setHintGone] = useState(false);
 
   const g = useRef({
-    boxes: [] as TrackedFace[],
+    boxes: [] as Track[],
+    focus: 0 as number, // id of the locked target
     ball: { k: "idle", t0: 0 } as BallState,
     particles: [] as Particle[],
     flash: 0,
@@ -98,6 +141,7 @@ export default function CatchGame({
         streamRef.current = stream;
         g.current.mirrored = facing === "user";
         g.current.boxes = [];
+        g.current.focus = 0;
         setStatus("ready");
       } catch (e) {
         if (!cancelled) {
@@ -137,23 +181,33 @@ export default function CatchGame({
             }
           }
           if (!alive) break;
-          setLonely(performance.now() - lastSeen > 7000);
-          // Hold the last seen faces briefly so the target doesn't flicker on a missed frame.
           const now = performance.now();
-          if (boxes.length || now - lastSeen > 600) {
-            g.current.boxes = boxes;
-            setFacesSeen(boxes.length);
-            setFacesFrontal(boxes.filter((b) => b.frontal >= FRONTAL_MIN).length);
-            const c = canvasRef.current;
-            if (c && v.videoWidth) {
-              // expose on-screen face centers (used by automated tests)
-              const m = coverMap(v.videoWidth, v.videoHeight, window.innerWidth, window.innerHeight, g.current.mirrored);
-              c.dataset.faces = JSON.stringify(
-                boxes.map(m.toScreen).map((b) => [Math.round(b.x + b.width / 2), Math.round(b.y + b.height / 2)]),
-              );
-            }
+          const S0 = g.current;
+          const tracks = updateTracks(S0.boxes, boxes, now);
+          // Target lock: keep the current target while it's in view; otherwise lock the biggest,
+          // most central face. Tapping a face also locks it.
+          if (!tracks.some((x) => x.id === S0.focus)) {
+            const vw = v.videoWidth;
+            const vh = v.videoHeight;
+            const rank = (x: Track) =>
+              x.width * (1 - Math.min(0.6, Math.hypot((x.x + x.width / 2 - vw / 2) / vw, (x.y + x.height / 2 - vh / 2) / vh)));
+            S0.focus = tracks.length ? tracks.reduce((a, z) => (rank(z) > rank(a) ? z : a)).id : 0;
           }
-          if (boxes.length) lastSeen = now;
+          tracks.sort((a, z) => (a.id === S0.focus ? -1 : z.id === S0.focus ? 1 : 0));
+          S0.boxes = tracks;
+          const focus = tracks[0];
+          setLocked(!!focus);
+          setFocusFacing(!focus || focus.frontal >= FRONTAL_MIN);
+          if (tracks.length) lastSeen = now;
+          setLonely(now - lastSeen > 7000);
+          const c = canvasRef.current;
+          if (c && v.videoWidth) {
+            // expose on-screen face centers, locked target first (used by automated tests)
+            const m = coverMap(v.videoWidth, v.videoHeight, window.innerWidth, window.innerHeight, g.current.mirrored);
+            c.dataset.faces = JSON.stringify(
+              tracks.map(m.toScreen).map((b) => [Math.round(b.x + b.width / 2), Math.round(b.y + b.height / 2)]),
+            );
+          }
         }
         await new Promise((r) => setTimeout(r, 60));
       }
@@ -292,14 +346,17 @@ export default function CatchGame({
       const r = rest();
       if (Math.hypot(e.clientX - r.x, e.clientY - r.y) > R * 2.2) {
         // Tapped a face? Throw straight at it.
-        const hit = screenBoxes().find(
+        const sb = screenBoxes();
+        const hitIdx = sb.findIndex(
           (b) =>
             e.clientX > b.x - b.width * 0.25 &&
             e.clientX < b.x + b.width * 1.25 &&
             e.clientY > b.y - b.height * 0.25 &&
             e.clientY < b.y + b.height * 1.25,
         );
+        const hit = sb[hitIdx];
         if (hit) {
+          S.focus = S.boxes[hitIdx]?.id ?? S.focus; // tapping a face locks it
           sfx.unlock();
           setHintGone(true);
           const dx = hit.x + hit.width / 2 - r.x;
@@ -360,7 +417,8 @@ export default function CatchGame({
         const perp = Math.abs(wx * dy - wy * dx);
         const tol = Math.max(b.width * 1.2, 90); // generous aim assist
         const facing = S.boxes[i]?.frontal >= FRONTAL_MIN;
-        const cost = perp + (facing ? 0 : 120); // prefer faces looking at you
+        const isFocus = S.boxes[i]?.id === S.focus;
+        const cost = perp + (isFocus ? 0 : 90) + (facing ? 0 : 120); // prefer the locked, face-on target
         if (along > 0 && perp < tol && cost < bestPerp) {
           bestPerp = cost;
           hitIdx = i;
@@ -431,7 +489,30 @@ export default function CatchGame({
       ctx.restore();
     }
 
-    function drawReticle(b: Box, t: number, active: boolean, facing: boolean) {
+    function drawReticle(b: Box, t: number, active: boolean, facing: boolean, isFocus = true) {
+      if (!isFocus && !active) {
+        // other faces in view: faint, small corner marks so the screen stays calm
+        const L2 = Math.min(b.width, b.height) * 0.16;
+        ctx.save();
+        ctx.globalAlpha = 0.45;
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2.5;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        for (const [cx, cy, sx, sy] of [
+          [b.x, b.y, 1, 1],
+          [b.x + b.width, b.y, -1, 1],
+          [b.x, b.y + b.height, 1, -1],
+          [b.x + b.width, b.y + b.height, -1, -1],
+        ] as [number, number, number, number][]) {
+          ctx.moveTo(cx, cy + sy * L2);
+          ctx.lineTo(cx, cy);
+          ctx.lineTo(cx + sx * L2, cy);
+        }
+        ctx.stroke();
+        ctx.restore();
+        return;
+      }
       const pad = b.width * 0.14;
       const x = b.x - pad;
       const y = b.y - pad;
@@ -508,7 +589,12 @@ export default function CatchGame({
       const b = S.ball;
       if (b.k === "idle" || b.k === "drag" || b.k === "fly") {
         const sb = screenBoxes();
-        sb.forEach((bx, i) => drawReticle(bx, now, b.k === "fly" && !!b.hit, (S.boxes[i]?.frontal ?? 1) >= FRONTAL_MIN));
+        const hitBox = b.k === "fly" ? b.hit : null;
+        sb.forEach((bx, i) => {
+          const isFocus = S.boxes[i]?.id === S.focus;
+          if (hitBox && !isFocus) return; // while the ball flies, only the target matters
+          drawReticle(bx, now, !!hitBox && isFocus, (S.boxes[i]?.frontal ?? 1) >= FRONTAL_MIN, isFocus);
+        });
       }
 
       const r0 = rest();
@@ -768,7 +854,7 @@ export default function CatchGame({
           <DevBall size={16} />
           {caughtCount}
           <span style={{ width: 2, height: 14, background: "#ddd5c5" }} />
-          <span style={{ color: facesSeen ? "#2f2c9e" : "#847c6d" }}>{status === "ready" ? (facesSeen ? `${facesSeen} IN SIGHT` : "SEARCHING") : "..."}</span>
+          <span style={{ color: locked ? "#2f2c9e" : "#847c6d" }}>{status === "ready" ? (locked ? "TARGET LOCKED" : "SEARCHING") : "..."}</span>
         </div>
         <button style={roundBtn} onClick={() => {
             if (g.current.ball.k !== "idle" || g.current.modalOpen) return;
@@ -779,7 +865,7 @@ export default function CatchGame({
       </div>
 
       {/* hint / messages */}
-      {status === "ready" && (toast || !hintGone || lonely || (facesSeen > 0 && facesFrontal === 0)) && !modal && !notLive && (
+      {status === "ready" && (toast || !hintGone || lonely || (locked && !focusFacing)) && !modal && !notLive && (
         <div
           style={{
             position: "absolute",
@@ -791,12 +877,12 @@ export default function CatchGame({
             justifyContent: "center",
           }}
         >
-          <div className="dialog pop" key={toast || (facesFrontal ? "hint" : "side")} style={{ maxWidth: 440, width: "100%", fontSize: 15 }}>
+          <div className="dialog pop" key={toast || (focusFacing ? "hint" : "side")} style={{ maxWidth: 440, width: "100%", fontSize: 15 }}>
             {toast ||
-              (facesSeen && !facesFrontal
+              (locked && !focusFacing
                 ? "They're side-on! Builders can only be caught face to face. Get them to look at you."
-                : facesSeen
-                  ? "A builder appeared! Swipe the DevBall at them, or tap their face."
+                : locked
+                  ? "Target locked! Swipe the DevBall at them, or tap any face to switch."
                   : lonely
                     ? "Can't find a face. Point the camera at someone 1-2 m away, in good light, with their whole face in view."
                     : "Point your camera at another player...")}
@@ -881,7 +967,6 @@ function CaughtModal({ entry, fresh, onContinue, onOpen }: { entry: DexEntry; fr
     }
   }
   const done = line === lines.length - 1 && typed >= text.length;
-  const t = typeInfo(entry.type);
 
   return (
     <div
@@ -919,10 +1004,10 @@ function CaughtModal({ entry, fresh, onContinue, onOpen }: { entry: DexEntry; fr
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontWeight: 700, fontSize: 20, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
                 <div className="small" style={{ opacity: 0.75 }}>
-                  The {t.name} Builder
+                  {builderTitle(entry.type, entry.type2)}
                 </div>
               </div>
-              <TypeBadge type={entry.type} />
+              <TypeBadge type={entry.type} type2={entry.type2} />
             </div>
           </div>
         </div>

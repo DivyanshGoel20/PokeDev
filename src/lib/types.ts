@@ -23,6 +23,14 @@ export type Link = { label: string; url: string };
 export const MAX_LINKS = 5;
 export const TYPE_KEYS = Object.keys(TYPES) as DevType[];
 
+/** Each player has 1 or 2 builder types. */
+export const MAX_TYPES = 2;
+
+/** "The ZK Builder" / "The ZK & Privacy Builder" */
+export function builderTitle(type: string, type2?: string | null) {
+  return `The ${typeInfo(type).name}${type2 ? ` & ${typeInfo(type2).name}` : ""} Builder`;
+}
+
 export function typeInfo(t: string) {
   return TYPES[t as DevType] ?? TYPES.infra;
 }
@@ -31,6 +39,7 @@ export function typeInfo(t: string) {
 export type DexEntry = {
   no: number;
   type: DevType;
+  type2?: DevType;
   isMe: boolean;
   caught: boolean;
   // Only present for yourself and players you have caught:
@@ -48,7 +57,7 @@ export type DexEntry = {
   caughtCount?: number;
 };
 
-export type RankRow = { username: string; displayName: string; type: DevType; catches: number; rank: number; isMe: boolean; avatar?: string };
+export type RankRow = { username: string; displayName: string; type: DevType; type2?: DevType; catches: number; rank: number; isMe: boolean; avatar?: string };
 
 export type Me = {
   no: number;
@@ -56,6 +65,7 @@ export type Me = {
   displayName: string;
   building: string;
   type: DevType;
+  type2?: DevType;
   xHandle: string;
   farcaster: string;
   telegram: string;
@@ -68,7 +78,7 @@ export type Me = {
 };
 
 /** Someone who caught you. If you've caught them too, `no` points to their dex entry. */
-export type CaughtBy = { displayName: string; username: string; type: DevType; at: string; no: number; caughtBack: boolean; avatar?: string };
+export type CaughtBy = { displayName: string; username: string; type: DevType; type2?: DevType; at: string; no: number; caughtBack: boolean; avatar?: string };
 
 export type AppState = { me: Me; dex: DexEntry[]; ranks: RankRow[]; caughtBy: CaughtBy[] };
 

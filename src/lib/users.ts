@@ -9,6 +9,7 @@ type DexRaw = {
   display_name: string;
   building: string;
   type: string;
+  type2: string | null;
   x_handle: string;
   farcaster: string;
   telegram: string;
@@ -24,7 +25,7 @@ type DexRaw = {
 export async function buildState(meId: number): Promise<AppState | null> {
   const [dexRows, rankRows, byRows] = await Promise.all([
     q<DexRaw>(
-      `SELECT u.id, u.username, u.display_name, u.building, u.type, u.x_handle, u.farcaster, u.telegram, u.links, u.catchable,
+      `SELECT u.id, u.username, u.display_name, u.building, u.type, u.type2, u.x_handle, u.farcaster, u.telegram, u.links, u.catchable,
          row_number() OVER (ORDER BY u.id)::int AS no,
          c.created_at AS caught_at, CASE WHEN u.avatar IS NOT NULL THEN u.avatar_at END AS avatar_at,
          (SELECT count(*) FROM catches x WHERE x.catcher_id = u.id)::int AS catch_count,
@@ -37,9 +38,9 @@ export async function buildState(meId: number): Promise<AppState | null> {
     ),
     // Leaderboard: most catches first; ties go to whoever reached that count first
     // (the time of their latest catch). Every player gets a unique position.
-    q<{ id: number; username: string; display_name: string; type: string; catches: number; pos: number }>(
+    q<{ id: number; username: string; display_name: string; type: string; type2: string | null; catches: number; pos: number }>(
       `WITH t AS (
-         SELECT u.id, u.username, u.display_name, u.type,
+         SELECT u.id, u.username, u.display_name, u.type, u.type2,
            count(c.caught_id)::int AS catches, max(c.created_at) AS reached_at
          FROM users u LEFT JOIN catches c ON c.catcher_id = u.id
          WHERE u.face IS NOT NULL
@@ -47,13 +48,13 @@ export async function buildState(meId: number): Promise<AppState | null> {
        ), r AS (
          SELECT t.*, row_number() OVER (ORDER BY catches DESC, reached_at ASC NULLS LAST, id ASC)::int AS pos FROM t
        )
-       SELECT id, username, display_name, type, catches, pos FROM r
+       SELECT id, username, display_name, type, type2, catches, pos FROM r
        WHERE pos <= 100 OR id = $1
        ORDER BY pos`,
       [meId],
     ),
-    q<{ id: number; username: string; display_name: string; type: string; at: string; caught_back: boolean }>(
-      `SELECT u.id, u.username, u.display_name, u.type, c.created_at AS at,
+    q<{ id: number; username: string; display_name: string; type: string; type2: string | null; at: string; caught_back: boolean }>(
+      `SELECT u.id, u.username, u.display_name, u.type, u.type2, c.created_at AS at,
          EXISTS (SELECT 1 FROM catches b WHERE b.catcher_id = $1 AND b.caught_id = u.id) AS caught_back
        FROM catches c JOIN users u ON u.id = c.catcher_id
        WHERE c.caught_id = $1
@@ -73,7 +74,7 @@ export async function buildState(meId: number): Promise<AppState | null> {
   const dex: DexEntry[] = dexRows.map((r) => {
     const isMe = r.id === meId;
     const caught = !!r.caught_at;
-    const base: DexEntry = { no: r.no, type: r.type as DevType, isMe, caught };
+    const base: DexEntry = { no: r.no, type: r.type as DevType, type2: (r.type2 as DevType) || undefined, isMe, caught };
     if (!isMe && !caught) return base; // unknown entry: number + type only
     return {
       ...base,
@@ -95,6 +96,7 @@ export async function buildState(meId: number): Promise<AppState | null> {
     username: r.username,
     displayName: r.display_name,
     type: r.type as DevType,
+    type2: (r.type2 as DevType) || undefined,
     catches: Number(r.catches),
     rank: Number(r.pos),
     isMe: r.id === meId,
@@ -108,6 +110,7 @@ export async function buildState(meId: number): Promise<AppState | null> {
     displayName: r.display_name,
     username: r.username,
     type: r.type as DevType,
+    type2: (r.type2 as DevType) || undefined,
     at: new Date(r.at).toISOString(),
     no: noById.get(r.id) ?? 0,
     caughtBack: !!r.caught_back,
@@ -122,6 +125,7 @@ export async function buildState(meId: number): Promise<AppState | null> {
       displayName: meRow.display_name,
       building: meRow.building,
       type: meRow.type as DevType,
+      type2: (meRow.type2 as DevType) || undefined,
       xHandle: meRow.x_handle,
       farcaster: meRow.farcaster,
       telegram: meRow.telegram,
@@ -152,6 +156,13 @@ export function cleanHandle(v: unknown) {
 
 export function cleanType(v: unknown): DevType | null {
   return TYPE_KEYS.includes(v as DevType) ? (v as DevType) : null;
+}
+
+/** 1 or 2 builder types: from `types: [...]` or `type` / `type2`. Duplicates and extras are dropped. */
+export function cleanTypes(body: Record<string, unknown>): { type: DevType | null; type2: DevType | null } {
+  const raw = Array.isArray(body.types) ? body.types : [body.type, body.type2];
+  const list = [...new Set(raw.map(cleanType).filter((x): x is DevType => !!x))].slice(0, 2);
+  return { type: list[0] ?? null, type2: list[1] ?? null };
 }
 
 export function cleanDescriptor(v: unknown): number[] | null {
@@ -204,7 +215,7 @@ export function profileFields(body: Record<string, unknown>) {
     links: cleanLinks(body.links),
     displayName: cleanText(body.displayName, 40),
     building: cleanText(body.building, 140),
-    type: cleanType(body.type),
+    ...cleanTypes(body),
     xHandle: cleanHandle(body.xHandle),
     farcaster: cleanHandle(body.farcaster),
     telegram: cleanHandle(body.telegram),

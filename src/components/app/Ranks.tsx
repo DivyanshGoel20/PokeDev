@@ -104,7 +104,7 @@ function Row({ r, n, face, onClick }: { r: RankRow; n: number; face: React.React
           {r.isMe && <span className="muted"> (you)</span>}
         </b>
         <span style={{ marginTop: 4, display: "inline-block" }}>
-          <TypeBadge type={r.type} small />
+          <TypeBadge type={r.type} type2={r.type2} small />
         </span>
       </span>
       <span style={{ textAlign: "right" }}>

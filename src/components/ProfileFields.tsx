@@ -7,6 +7,8 @@ export type Profile = {
   displayName: string;
   building: string;
   type: string;
+  /** Optional second builder type ("" when none). */
+  type2: string;
   xHandle: string;
   farcaster: string;
   telegram: string;
@@ -15,7 +17,7 @@ export type Profile = {
   links: Link[];
 };
 
-export const emptyProfile: Profile = { displayName: "", building: "", type: "", xHandle: "", farcaster: "", telegram: "", avatar: null, links: [] };
+export const emptyProfile: Profile = { displayName: "", building: "", type: "", type2: "", xHandle: "", farcaster: "", telegram: "", avatar: null, links: [] };
 
 /** Center-crop and shrink a picked image to a 320x320 JPEG data URL. */
 async function toAvatar(file: File): Promise<string> {
@@ -124,6 +126,9 @@ export function ProfileFields({
 }) {
   const set = (k: keyof Profile) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     onChange({ ...value, [k]: e.target.value });
+  const [tooMany, setTooMany] = useState(false);
+  const picked = [value.type, value.type2].filter(Boolean).length;
+  if (tooMany && picked < 2) setTooMany(false);
 
   return (
     <>
@@ -146,12 +151,29 @@ export function ProfileFields({
         {errors.displayName && <div className="field-msg">{errors.displayName}</div>}
       </div>
       <div className="field" id="f-type" data-invalid={!!errors.type}>
-        <label>
-          Your type<span className="req">*</span>
+        <label className="row spread">
+          <span>
+            Your type<span className="req">*</span>
+          </span>
+          <span className="muted" style={{ fontWeight: 600 }}>
+            Pick 1 or 2 · {[value.type, value.type2].filter(Boolean).length}/2
+          </span>
         </label>
         <div className="type-grid">
           {TYPE_KEYS.map((k) => (
-            <button type="button" key={k} className="type-pick" data-on={value.type === k} onClick={() => onChange({ ...value, type: k })}>
+            <button
+              type="button"
+              key={k}
+              className="type-pick"
+              data-on={value.type === k || value.type2 === k}
+              onClick={() => {
+                if (value.type === k) return onChange({ ...value, type: value.type2, type2: "" });
+                if (value.type2 === k) return onChange({ ...value, type2: "" });
+                if (!value.type) return onChange({ ...value, type: k });
+                if (!value.type2) return onChange({ ...value, type2: k });
+                setTooMany(true); // already 2: ask them to remove one first
+              }}
+            >
               <span className="type" style={{ background: TYPES[k].color, color: TYPES[k].fg }}>
                 {TYPES[k].label}
               </span>
@@ -160,6 +182,7 @@ export function ProfileFields({
           ))}
         </div>
         {errors.type && <div className="field-msg">{errors.type}</div>}
+        {tooMany && !errors.type && <div className="field-msg">You can pick up to 2. Tap one to remove it first.</div>}
       </div>
       <div className="field">
         <label>What are you building?</label>

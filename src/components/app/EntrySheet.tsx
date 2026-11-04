@@ -1,10 +1,9 @@
 "use client";
-import { typeInfo, type DexEntry } from "@/lib/types";
+import { builderTitle, type DexEntry } from "@/lib/types";
 import { Lid, Portrait, TypeBadge, dexNo } from "../ui";
 
 export default function EntrySheet({ entry: e, onClose }: { entry: DexEntry; onClose: () => void }) {
   const known = e.caught || e.isMe;
-  const t = typeInfo(e.type);
 
   return (
     <div className="sheet">
@@ -32,10 +31,10 @@ export default function EntrySheet({ entry: e, onClose }: { entry: DexEntry; onC
           </div>
           <div style={{ fontSize: 26, fontWeight: 700, marginTop: 8, lineHeight: 1.15 }}>{known ? e.displayName : "??????"}</div>
           <div className="muted" style={{ fontWeight: 600, marginTop: 2 }}>
-            {known ? `@${e.username} · The ${t.name} Builder` : `The ${t.name} Builder`}
+            {known ? `@${e.username} · ${builderTitle(e.type, e.type2)}` : builderTitle(e.type, e.type2)}
           </div>
           <div style={{ marginTop: 12 }}>
-            <TypeBadge type={e.type} />
+            <TypeBadge type={e.type} type2={e.type2} />
           </div>
 
           {known && (

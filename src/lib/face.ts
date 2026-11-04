@@ -114,24 +114,61 @@ function grabFrame(input: HTMLVideoElement | HTMLCanvasElement, maxSide: number)
 
 const scaleBox = (b: Box, k: number): Box => ({ x: b.x * k, y: b.y * k, width: b.width * k, height: b.height * k });
 
+/** At most this many faces are tracked at once (the closest / most central ones). */
+export const MAX_TRACKED = 3;
+const cropCanvas = typeof document !== "undefined" ? document.createElement("canvas") : null;
+
 /**
- * Detection of all faces for live tracking, with how face-on each one is. Uses the fast tiny
- * detector, and when it sees nothing, falls back to the slower but more robust SSD detector.
+ * Live tracking for the catch screen, built for crowded halls:
+ *  - confident detections only, and faces too small (far away) to catch are ignored;
+ *  - only the MAX_TRACKED biggest, most central faces are kept;
+ *  - the face-direction check (landmarks) runs only on those few, so a crowd doesn't slow it down.
  * Boxes are in video pixels.
  */
 export async function detectBoxes(input: HTMLVideoElement | HTMLCanvasElement): Promise<TrackedFace[]> {
   const faceapi = await loadFace();
   const { canvas, back } = grabFrame(input, 640);
-  let res = await faceapi
-    .detectAllFaces(canvas, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.3 }))
-    .withFaceLandmarks();
-  if (res.length === 0) {
-    res = await faceapi.detectAllFaces(canvas, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.4 })).withFaceLandmarks();
+  let dets = await faceapi.detectAllFaces(canvas, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.5 }));
+  if (dets.length === 0) {
+    dets = await faceapi.detectAllFaces(canvas, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }));
   }
-  return res.map((r) => {
-    const b = r.detection.box;
-    return { ...scaleBox({ x: b.x, y: b.y, width: b.width, height: b.height }, back), frontal: frontalScore(r.landmarks.positions) };
-  });
+  const W = canvas.width;
+  const H = canvas.height;
+  const minW = Math.min(W, H) * 0.07; // smaller than this is too far away to catch reliably
+  const ranked = dets
+    .map((d) => d.box)
+    .filter((b) => b.width >= minW)
+    .map((b) => {
+      const dx = (b.x + b.width / 2 - W / 2) / W;
+      const dy = (b.y + b.height / 2 - H / 2) / H;
+      return { b, score: b.width * (1 - Math.min(0.6, Math.hypot(dx, dy))) }; // big and central first
+    })
+    .sort((a, z) => z.score - a.score)
+    .slice(0, MAX_TRACKED);
+
+  const out: TrackedFace[] = [];
+  for (const { b } of ranked) {
+    let frontal = 0;
+    if (cropCanvas) {
+      // Landmarks on a crop of just this face (cheap, and unaffected by everyone else in frame).
+      // The landmark model expects the crop to be exactly the detection box (no extra margin).
+      const sx = Math.max(0, b.x);
+      const sy = Math.max(0, b.y);
+      const sw = Math.min(W - sx, b.width);
+      const sh = Math.min(H - sy, b.height);
+      cropCanvas.width = 150;
+      cropCanvas.height = Math.max(1, Math.round((150 * sh) / sw));
+      cropCanvas.getContext("2d")!.drawImage(canvas, sx, sy, sw, sh, 0, 0, cropCanvas.width, cropCanvas.height);
+      try {
+        const lm = (await faceapi.detectFaceLandmarks(cropCanvas)) as FaceApiNS.FaceLandmarks68;
+        frontal = frontalScore(lm.positions);
+      } catch {
+        /* treat as not face-on */
+      }
+    }
+    out.push({ ...scaleBox({ x: b.x, y: b.y, width: b.width, height: b.height }, back), frontal });
+  }
+  return out;
 }
 
 /** Accurate detection + 128-number face descriptors, with how face-on each face is. Boxes in video pixels. */

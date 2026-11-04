@@ -91,7 +91,7 @@ export default function Dex({ state, onEntry }: { state: AppState; onEntry: (no:
                       {known ? e.displayName : "- - - - -"}
                       {e.isMe && <small>That&apos;s you</small>}
                     </span>
-                    {known ? <TypeBadge type={e.type} small /> : null}
+                    {known ? <TypeBadge type={e.type} type2={e.type2} small /> : null}
                     <span style={{ width: 20, display: "grid", placeItems: "center" }}>
                       {e.caught && <DevBall size={18} />}
                     </span>

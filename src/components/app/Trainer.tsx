@@ -15,6 +15,7 @@ export default function Trainer({ state, refresh, onInvite }: { state: AppState;
     displayName: me.displayName,
     building: me.building,
     type: me.type,
+    type2: me.type2 ?? "",
     xHandle: me.xHandle,
     farcaster: me.farcaster,
     telegram: me.telegram,
@@ -24,7 +25,7 @@ export default function Trainer({ state, refresh, onInvite }: { state: AppState;
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [errs, setErrs] = useState<FieldErrors>({});
-  const typesCaught = new Set(dex.filter((e) => e.caught).map((e) => e.type));
+  const typesCaught = new Set(dex.filter((e) => e.caught).flatMap((e) => (e.type2 ? [e.type, e.type2] : [e.type])));
   const others = dex.filter((e) => !e.isMe).length;
   const owned = dex.filter((e) => e.caught).length;
   const pct = others ? Math.round((owned / others) * 100) : 0;
@@ -42,7 +43,7 @@ export default function Trainer({ state, refresh, onInvite }: { state: AppState;
     setError("");
     const e2: FieldErrors = {};
     if (!profile.displayName.trim()) e2.displayName = "Add your name";
-    if (!profile.type) e2.type = "Pick your type";
+    if (!profile.type) e2.type = "Pick at least one type (up to 2)";
     setErrs(e2);
     if (e2.displayName) return focusField("f-displayName");
     if (e2.type) return focusField("f-type");
@@ -116,7 +117,7 @@ export default function Trainer({ state, refresh, onInvite }: { state: AppState;
                     @{me.username}
                   </div>
                   <div style={{ marginTop: 12 }}>
-                    <TypeBadge type={me.type} />
+                    <TypeBadge type={me.type} type2={me.type2} />
                   </div>
                   <div className="px" style={{ fontSize: 9, lineHeight: 1.7, marginTop: 10 }}>
                     LV.{levelInfo(me.catchCount).level} {levelInfo(me.catchCount).title.toUpperCase()}

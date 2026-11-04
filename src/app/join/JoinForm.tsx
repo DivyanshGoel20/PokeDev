@@ -54,7 +54,7 @@ export default function JoinForm() {
     setError("");
     const e2: FieldErrors = {};
     if (!profile.displayName.trim()) e2.displayName = "Add your name so people know who they caught";
-    if (!profile.type) e2.type = "Pick the type that fits you best";
+    if (!profile.type) e2.type = "Pick at least one type that fits you (up to 2)";
     if (Object.keys(e2).length) return fail(e2);
     setErrs({});
     setBusy(true);
