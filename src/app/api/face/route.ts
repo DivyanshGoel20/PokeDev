@@ -21,7 +21,7 @@ export async function POST(req: Request) {
   const clash = near.find((n) => n.id !== me.id && Number(n.dist) < DUPLICATE_FACE);
   if (clash)
     return NextResponse.json(
-      { error: "This face already has a PokeDev account. One account per person!", code: "duplicate" },
+      { error: "This face already has a PokeDev account. One account per person!", code: "duplicate", hint: mask(clash.username) },
       { status: 409 },
     );
 
@@ -44,4 +44,9 @@ export async function POST(req: Request) {
     }
   }
   return NextResponse.json({ ok: true });
+}
+
+/** "divyanshgoel17" -> "di***7": enough for the owner to recognise, not enough to look anyone up. */
+function mask(u: string) {
+  return u.length <= 3 ? `${u[0]}**` : `${u.slice(0, 2)}***${u.slice(-1)}`;
 }

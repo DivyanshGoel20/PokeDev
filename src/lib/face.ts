@@ -21,14 +21,61 @@ function withTimeout<T>(ms: number, message: string, fn: () => Promise<T>): Prom
 }
 
 /** Lazily load face-api + model weights (only once per page load). */
+/* ---------- model download with progress (so nobody stares at a frozen "booting" screen) ---------- */
+const MODEL_FILES: [string, number][] = [
+  ["/models/tiny_face_detector_model.bin", 193321],
+  ["/models/face_landmark_68_model.bin", 356840],
+  ["/models/ssd_mobilenetv1_model.bin", 5616957],
+  ["/models/face_recognition_model.bin", 6444032],
+];
+let progress = 0;
+const progressListeners = new Set<(p: number) => void>();
+/** Subscribe to scanner download progress (0..1). Returns an unsubscribe function. */
+export function onScannerProgress(cb: (p: number) => void) {
+  progressListeners.add(cb);
+  cb(progress);
+  return () => progressListeners.delete(cb);
+}
+function setProgress(p: number) {
+  progress = p;
+  progressListeners.forEach((cb) => cb(p));
+}
+/** Download the model files into the browser cache, reporting progress (they're cached for a year). */
+async function prefetchModels() {
+  const total = MODEL_FILES.reduce((a, [, n]) => a + n, 0);
+  let done = 0;
+  await Promise.all(
+    MODEL_FILES.map(async ([url, size]) => {
+      const res = await fetch(url);
+      if (!res.ok || !res.body) throw new Error("Couldn't download the face scanner");
+      const reader = res.body.getReader();
+      let got = 0;
+      for (;;) {
+        const { done: end, value } = await reader.read();
+        if (end) break;
+        got += value.length;
+        done += value.length;
+        setProgress(Math.min(0.99, done / total));
+      }
+      if (got < size * 0.5) throw new Error("Face scanner download was interrupted");
+    }),
+  );
+  setProgress(1);
+}
+
 export function loadFace(): Promise<FaceApi> {
   if (!loading) {
     loading = withTimeout(60_000, "The face scanner took too long to load. Check your connection and try again.", async () => {
       const faceapi = (await import("@vladmandic/face-api")) as FaceApi;
+      await prefetchModels();
       // The bundled tfjs is typed loosely; setBackend/ready exist at runtime.
       const tf = faceapi.tf as unknown as { setBackend(b: string): Promise<boolean>; ready(): Promise<void> };
       // WebGL on every modern phone; plain CPU otherwise (we don't ship the wasm backend).
-      const okGl = await tf.setBackend("webgl").catch(() => false);
+      // Some phones stall while setting up WebGL: give it a few seconds, then use the CPU.
+      const okGl = await Promise.race([
+        tf.setBackend("webgl").catch(() => false),
+        new Promise<boolean>((r) => setTimeout(() => r(false), 8000)),
+      ]);
       if (!okGl) await tf.setBackend("cpu");
       await tf.ready();
       await Promise.all([
@@ -276,7 +323,11 @@ export function meanDescriptor(list: number[][]) {
 
 /* ---------------- camera ---------------- */
 
-export async function startCamera(video: HTMLVideoElement, facing: "user" | "environment") {
+export function startCamera(video: HTMLVideoElement, facing: "user" | "environment"): Promise<MediaStream> {
+  return withTimeout(15_000, "The camera didn't start. Tap Try again (and allow camera access if asked).", () => openCamera(video, facing));
+}
+
+async function openCamera(video: HTMLVideoElement, facing: "user" | "environment") {
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new Error("Camera not available. Open this site over HTTPS in Safari or Chrome.");
   }

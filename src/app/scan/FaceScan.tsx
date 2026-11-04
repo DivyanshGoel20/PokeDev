@@ -4,6 +4,7 @@ import { cameraErrorMessage, describeFace, distance, loadFace, meanDescriptor, s
 import { postJSON } from "@/lib/client";
 import { DevBall } from "@/components/DevBall";
 import { Lid } from "@/components/ui";
+import { ScannerProgressText } from "@/components/PreloadScanner";
 import { FRONTAL_MIN_SCAN } from "@/lib/types";
 
 const SAMPLES = 5;
@@ -15,6 +16,7 @@ export default function FaceScan({
   name,
   mode = "register",
   password,
+  username,
   onBack,
 }: {
   isNew: boolean;
@@ -23,10 +25,12 @@ export default function FaceScan({
   /** "recover": find the account that owns this face and give it a new passcode. */
   mode?: "register" | "recover";
   password?: string;
+  username?: string;
   onBack?: () => void;
 }) {
   const recover = mode === "recover";
   const [duplicate, setDuplicate] = useState(false);
+  const [dupHint, setDupHint] = useState("");
   const [recovered, setRecovered] = useState("");
   const [phase, setPhase] = useState<Phase>("intro");
   const [hint, setHint] = useState("Look straight at the camera");
@@ -114,7 +118,7 @@ export default function FaceScan({
     stopCamera(streamRef.current);
     setPhase("saving");
     if (recover) {
-      const r = await postJSON<{ username?: string }>("/api/recover", { descriptor: meanDescriptor(samples), password });
+      const r = await postJSON<{ username?: string }>("/api/recover", { descriptor: meanDescriptor(samples), password, username });
       if (r.error) {
         setError(r.error);
         setPhase("error");
@@ -124,10 +128,11 @@ export default function FaceScan({
       }
       return;
     }
-    const r = await postJSON<{ code?: string }>("/api/face", { descriptor: meanDescriptor(samples) });
+    const r = await postJSON<{ code?: string; hint?: string }>("/api/face", { descriptor: meanDescriptor(samples) });
     if (r.error) {
-      setError(r.error);
+      setError(r.error + (r.hint ? ` (It's @${r.hint}.)` : ""));
       setDuplicate(r.code === "duplicate");
+      setDupHint(r.hint ?? "");
       setPhase("error");
     } else {
       setPhase("done");
@@ -207,7 +212,7 @@ export default function FaceScan({
             </div>
           </div>
           <div className="dialog" style={{ marginTop: 14, fontSize: 16 }}>
-            {phase === "loading" ? "Booting scanner..." : hint}
+            {phase === "loading" ? <ScannerProgressText fallback="Starting camera..." /> : hint}
           </div>
           <p className="center small muted" style={{ marginTop: 12 }}>
             No video or photo leaves your phone. Your face becomes 128 numbers here, and only those are saved.
@@ -256,7 +261,7 @@ export default function FaceScan({
             <div className="error">{error}</div>
             {duplicate ? (
               <div className="stack">
-                <button className="btn btn-red" onClick={() => window.location.replace("/recover?from=signup")}>
+                <button className="btn btn-red" onClick={() => window.location.replace(`/recover?from=signup&hint=${encodeURIComponent(dupHint)}`)}>
                   That&apos;s me: use my existing account
                 </button>
                 <button className="btn btn-quiet" onClick={begin}>

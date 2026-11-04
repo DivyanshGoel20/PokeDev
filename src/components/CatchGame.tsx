@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cameraErrorMessage, coverMap, describeFace, detectBoxes, distance, loadFace, meanDescriptor, startCamera, stopCamera, type Box, type TrackedFace } from "@/lib/face";
 import QRCode from "qrcode";
+import { ScannerProgressText } from "./PreloadScanner";
 import { postJSON } from "@/lib/client";
 import { sfx } from "@/lib/sfx";
 import { FRONTAL_MIN, builderTitle, type DexEntry } from "@/lib/types";
@@ -109,6 +110,7 @@ export default function CatchGame({
   const [locked, setLocked] = useState(false); // a target is locked on
   const [focusFacing, setFocusFacing] = useState(true); // ...and it's face-on
   const [lonely, setLonely] = useState(false); // no face found for a while
+  const [retry, setRetry] = useState(0); // "Try again" restarts camera + scanner without reloading
 
   const [hintGone, setHintGone] = useState(false);
 
@@ -153,7 +155,7 @@ export default function CatchGame({
     return () => {
       cancelled = true;
     };
-  }, [facing]);
+  }, [facing, retry]);
 
   useEffect(() => () => stopCamera(streamRef.current), []);
 
@@ -907,7 +909,7 @@ export default function CatchGame({
           <div className="center" style={{ color: "#fff" }}>
             <DevBall size={70} className="bob" />
             <p className="px" style={{ fontSize: 10, marginTop: 22, letterSpacing: ".1em" }}>
-              BOOTING SCANNER...
+              <ScannerProgressText fallback="STARTING CAMERA..." />
             </p>
           </div>
         </div>
@@ -919,7 +921,11 @@ export default function CatchGame({
               {error}
             </div>
             <div className="stack">
-              <button className="btn btn-red" onClick={() => window.location.reload()}>
+              <button className="btn btn-red" onClick={() => {
+                setError("");
+                setStatus("loading");
+                setRetry((n) => n + 1);
+              }}>
                 Try again
               </button>
               <button className="btn" onClick={onClose}>

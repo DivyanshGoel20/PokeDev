@@ -97,8 +97,10 @@ export const FRONTAL_MIN_SCAN = 0.6;
 // so a confident match must sit well below that and clearly closer than anyone else.
 // The catcher is never a candidate on the back camera, so a clear margin over everyone else is
 // what protects against wrong catches; readings from other phones in hall light land ~0.45-0.55.
-export const MATCH = { STRONG: 0.45, STRONG_MARGIN: 0.04, LOOSE: 0.54, LOOSE_MARGIN: 0.08, CLEAR: 0.58, CLEAR_MARGIN: 0.1, UNSURE: 0.62 } as const;
+// Real catches at Devcon: correct matches sit at 0.29-0.39 with a 0.13+ gap to the next player;
+// readings where two players are almost equally close (gap < 0.05) are the ones that went wrong.
+export const MATCH = { STRONG: 0.4, STRONG_MARGIN: 0.06, LOOSE: 0.44, LOOSE_MARGIN: 0.1, CLEAR: 0, CLEAR_MARGIN: 1, UNSURE: 0.62 } as const;
 /** Registering a face this close to another player's is refused (one face, one account). */
 export const DUPLICATE_FACE = 0.45;
 /** Passcode recovery by face: stricter than catching, and clearly closer than anyone else. */
-export const RECOVER = { MAX: 0.42, MARGIN: 0.08 } as const;
+export const RECOVER = { MAX: 0.38, MARGIN: 0.1 } as const;

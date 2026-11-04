@@ -7,28 +7,34 @@ import FaceScan from "../scan/FaceScan";
 
 export default function RecoverForm() {
   const [step, setStep] = useState<0 | 1>(0);
+  const [username, setUsername] = useState("");
+  const [hint, setHint] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [err, setErr] = useState<{ password?: string; confirm?: string }>({});
+  const [err, setErr] = useState<{ username?: string; password?: string; confirm?: string }>({});
   const [fromSignup, setFromSignup] = useState(false);
 
   useEffect(() => {
-    setFromSignup(new URLSearchParams(window.location.search).get("from") === "signup");
+    const sp = new URLSearchParams(window.location.search);
+    setFromSignup(sp.get("from") === "signup");
+    setHint((sp.get("hint") ?? "").replace(/[^a-z0-9_*]/gi, "").slice(0, 12));
   }, []);
 
   function next(e: React.FormEvent) {
     e.preventDefault();
     const e2: typeof err = {};
+    if (!/^[a-z0-9_]{3,20}$/.test(username)) e2.username = "Enter the username of your account";
     if (password.length < 6) e2.password = "At least 6 characters";
     else if (confirm !== password) e2.confirm = "Passcodes don't match";
     setErr(e2);
+    if (e2.username) return focusField("f-username");
     if (e2.password) return focusField("f-password");
     if (e2.confirm) return focusField("f-confirm");
     setStep(1);
     window.scrollTo(0, 0);
   }
 
-  if (step === 1) return <FaceScan mode="recover" password={password} isNew={false} hasFace={false} name="" onBack={() => setStep(0)} />;
+  if (step === 1) return <FaceScan mode="recover" password={password} username={username} isNew={false} hasFace={false} name="" onBack={() => setStep(0)} />;
 
   return (
     <>
@@ -36,10 +42,28 @@ export default function RecoverForm() {
       <main className="wrap plain screen">
         <div className="dialog" style={{ marginBottom: 22 }}>
           {fromSignup
-            ? "You already have a PokeDev account! Set a new passcode and scan your face to get back into it."
-            : "No worries! Your face is your key. Pick a new passcode, then scan your face to unlock your account."}
+            ? `You already have a PokeDev account${hint ? ` (@${hint})` : ""}! Enter its username, set a new passcode and scan your face to get back in.`
+            : "No worries! Enter your username, pick a new passcode, then scan your face to unlock your account."}
         </div>
         <form onSubmit={next}>
+          <div className="field" id="f-username" data-invalid={!!err.username}>
+            <label htmlFor="in-username">
+              Your username<span className="req">*</span>
+            </label>
+            <div className="input-icon">
+              <span>@</span>
+              <input
+                id="in-username"
+                className="input"
+                autoCapitalize="none"
+                autoCorrect="off"
+                autoComplete="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+              />
+            </div>
+            {err.username && <div className="field-msg">{err.username}</div>}
+          </div>
           <div className="field" id="f-password" data-invalid={!!err.password}>
             <label htmlFor="in-password">
               New passcode (6+ characters)<span className="req">*</span>

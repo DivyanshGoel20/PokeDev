@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getUser } from "@/lib/auth";
 import LoginForm from "./LoginForm";
 import { FreshOnBack } from "@/components/FreshOnBack";
+import { PreloadScanner } from "@/components/PreloadScanner";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,7 @@ export default async function Page() {
   return (
     <>
       <FreshOnBack />
+      <PreloadScanner />
       <LoginForm />
     </>
   );

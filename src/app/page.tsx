@@ -6,6 +6,7 @@ import { DevBall } from "@/components/DevBall";
 import { Lid } from "@/components/ui";
 import AppShell from "@/components/app/AppShell";
 import { FreshOnBack } from "@/components/FreshOnBack";
+import { PreloadScanner } from "@/components/PreloadScanner";
 import { DevconChip, Disclaimer, PrizeBanner } from "@/components/DevconBits";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +25,7 @@ function Landing() {
   return (
     <>
       <FreshOnBack />
+      <PreloadScanner />
       <Lid title="POKEDEV" subtitle="Catch every builder" />
       <main className="wrap plain">
         <div className="bezel screen" style={{ marginTop: 6 }}>
