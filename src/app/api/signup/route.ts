@@ -25,6 +25,18 @@ export async function POST(req: Request) {
   const avatar = cleanPhoto(body.avatar);
   // One-time invite from a catch attempt: redeemed when this player finishes their face scan.
   const invite = typeof body.invite === "string" && /^[a-z0-9]{12,40}$/.test(body.invite) ? body.invite : null;
+  // Who brought this player in: the owner of a catch invite, or the username in an invite QR link.
+  let referredBy: number | null = null;
+  if (invite) {
+    const [inv] = await q<{ catcher_id: number }>("SELECT catcher_id FROM invites WHERE token = $1", [invite]);
+    referredBy = inv?.catcher_id ?? null;
+  }
+  const ref = typeof body.ref === "string" ? body.ref.trim().toLowerCase().replace(/^@/, "") : "";
+  if (!referredBy && /^[a-z0-9_]{3,20}$/.test(ref)) {
+    const [r] = await q<{ id: number }>("SELECT id FROM users WHERE username = $1", [ref]);
+    referredBy = r?.id ?? null;
+  }
+
   const rows = await q<{ id: number }>(
     `INSERT INTO users (username, pass_hash, display_name, building, type, x_handle, farcaster, telegram, links, avatar, avatar_at, invite_token, type2)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CASE WHEN $10::text IS NULL THEN NULL ELSE now() END, $11, $12) RETURNING id`,
@@ -43,6 +55,7 @@ export async function POST(req: Request) {
       p.type2,
     ],
   );
+  if (referredBy) await q("UPDATE users SET referred_by = $1, referred_at = now() WHERE id = $2", [referredBy, rows[0].id]);
   await createSession(rows[0].id);
   return NextResponse.json({ ok: true });
 }

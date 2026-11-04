@@ -1,5 +1,6 @@
 "use client";
-import type { AppState, RankRow } from "@/lib/types";
+import { useState } from "react";
+import type { AppState, RankRow, ReferrerRow } from "@/lib/types";
 import { Lid, Portrait, TypeBadge } from "../ui";
 import { PrizeBanner } from "../DevconBits";
 
@@ -9,6 +10,7 @@ export default function Ranks({ state, onEntry }: { state: AppState; onEntry: (n
   const top = ranks.slice(0, 3);
   const rest = ranks.slice(3);
   const meInList = ranks.some((r) => r.isMe);
+  const [mode, setMode] = useState<"catches" | "referrals">("catches");
 
   function face(r: RankRow, size: number) {
     const d = byUser.get(r.username);
@@ -41,6 +43,18 @@ export default function Ranks({ state, onEntry }: { state: AppState; onEntry: (n
         <div style={{ marginBottom: 18 }}>
           <PrizeBanner rank={me.catchCount ? me.rank : undefined} />
         </div>
+        <div className="row" style={{ gap: 6, marginBottom: 14, justifyContent: "center" }}>
+          <button className="btn btn-sm" data-on={mode === "catches"} onClick={() => setMode("catches")} style={mode === "catches" ? { background: "var(--ink)", color: "#fff" } : undefined}>
+            Catches
+          </button>
+          <button className="btn btn-sm" data-on={mode === "referrals"} onClick={() => setMode("referrals")} style={mode === "referrals" ? { background: "var(--ink)", color: "#fff" } : undefined}>
+            Referrals
+          </button>
+        </div>
+        {mode === "referrals" ? (
+          <Referrals rows={state.referrers} me={me} face={(r) => face({ ...r, catches: r.referrals }, 42)} onTap={(u) => { const d = byUser.get(u); if (d) onEntry(d.no); }} />
+        ) : (
+        <>
         <p className="small muted center" style={{ margin: "-4px 0 18px", lineHeight: 1.5 }}>
           Most builders caught wins. Tied? Whoever got there first ranks higher.
         </p>
@@ -88,6 +102,8 @@ export default function Ranks({ state, onEntry }: { state: AppState; onEntry: (n
             />
           </>
         )}
+        </>
+        )}
       </main>
     </>
   );
@@ -114,5 +130,59 @@ function Row({ r, n, face, onClick }: { r: RankRow; n: number; face: React.React
         <span className="small muted">caught</span>
       </span>
     </button>
+  );
+}
+
+function Referrals({
+  rows,
+  me,
+  face,
+  onTap,
+}: {
+  rows: ReferrerRow[];
+  me: AppState["me"];
+  face: (r: ReferrerRow) => React.ReactNode;
+  onTap: (username: string) => void;
+}) {
+  const mine = rows.find((r) => r.isMe);
+  return (
+    <>
+      <p className="small muted center" style={{ margin: "-4px 0 18px", lineHeight: 1.5 }}>
+        Builders who joined PokeDev from your invite QR. Tied? Whoever got there first ranks higher.
+      </p>
+      {rows.length === 0 ? (
+        <div className="dialog">No referrals yet. Share your invite QR (Home &rarr; Invite a builder) and climb this board!</div>
+      ) : (
+        rows.map((r) => (
+          <button
+            key={r.username}
+            className={`rank-row${r.isMe ? " me" : ""}`}
+            onClick={() => onTap(r.username)}
+            style={{ width: "100%", textAlign: "left" }}
+          >
+            <span className="rank-n">{r.rank}</span>
+            {face(r)}
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <b style={{ display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {r.displayName}
+                {r.isMe && <span className="muted"> (you)</span>}
+              </b>
+              <span className="small muted">@{r.username}</span>
+            </span>
+            <span style={{ textAlign: "right" }}>
+              <span className="px" style={{ fontSize: 14, display: "block" }}>
+                {r.referrals}
+              </span>
+              <span className="small muted">joined</span>
+            </span>
+          </button>
+        ))
+      )}
+      {!mine && (
+        <p className="center small muted" style={{ marginTop: 16 }}>
+          You&apos;ve referred {me.referrals} {me.referrals === 1 ? "builder" : "builders"} so far.
+        </p>
+      )}
+    </>
   );
 }

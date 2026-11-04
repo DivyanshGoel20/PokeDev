@@ -36,6 +36,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_at TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS links TEXT NOT NULL DEFAULT '[]';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_token TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS type2 TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by INTEGER REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_at TIMESTAMPTZ;
 CREATE TABLE IF NOT EXISTS invites (
   token TEXT PRIMARY KEY,
   catcher_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -47,6 +49,7 @@ CREATE TABLE IF NOT EXISTS rate_limits (
   window_start TIMESTAMPTZ NOT NULL,
   hits INTEGER NOT NULL
 );
+UPDATE users u SET referred_by = i.catcher_id, referred_at = i.created_at FROM invites i WHERE i.used_by = u.id AND u.referred_by IS NULL AND i.catcher_id <> u.id;
 `;
 
 declare global {
@@ -80,7 +83,7 @@ async function createRunner(): Promise<Runner> {
 
   // Cold starts: one cheap check instead of re-running every migration statement.
   const ready = await run(
-    `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'type2')
+    `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'referred_at')
         AND EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'rate_limits')
         AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'catches' AND column_name = 'photo')
         AS ok`,

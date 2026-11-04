@@ -19,19 +19,25 @@ type DexRaw = {
   avatar_at: string | null;
   catch_count: number;
   caught_count: number;
+  ref_username: string | null;
+  ref_name: string | null;
+  referrals: number;
 };
 
 /** Everything the app needs, in one round of queries. */
 export async function buildState(meId: number): Promise<AppState | null> {
-  const [dexRows, rankRows, byRows] = await Promise.all([
+  const [dexRows, rankRows, byRows, refRows] = await Promise.all([
     q<DexRaw>(
       `SELECT u.id, u.username, u.display_name, u.building, u.type, u.type2, u.x_handle, u.farcaster, u.telegram, u.links, u.catchable,
          row_number() OVER (ORDER BY u.id)::int AS no,
          c.created_at AS caught_at, CASE WHEN u.avatar IS NOT NULL THEN u.avatar_at END AS avatar_at,
          (SELECT count(*) FROM catches x WHERE x.catcher_id = u.id)::int AS catch_count,
-         (SELECT count(*) FROM catches x WHERE x.caught_id = u.id)::int AS caught_count
+         (SELECT count(*) FROM catches x WHERE x.caught_id = u.id)::int AS caught_count,
+         rb.username AS ref_username, rb.display_name AS ref_name,
+         (SELECT count(*) FROM users j WHERE j.referred_by = u.id AND j.face IS NOT NULL)::int AS referrals
        FROM users u
        LEFT JOIN catches c ON c.caught_id = u.id AND c.catcher_id = $1
+       LEFT JOIN users rb ON rb.id = u.referred_by
        WHERE u.face IS NOT NULL OR u.id = $1
        ORDER BY u.id`,
       [meId],
@@ -61,6 +67,18 @@ export async function buildState(meId: number): Promise<AppState | null> {
        ORDER BY c.created_at DESC LIMIT 50`,
       [meId],
     ),
+    // Referral leaderboard: players who joined (and scanned) from someone's invite.
+    // Ties go to whoever reached that number first.
+    q<{ id: number; username: string; display_name: string; type: string; type2: string | null; referrals: number; pos: number }>(
+      `WITH t AS (
+         SELECT r.id, r.username, r.display_name, r.type, r.type2, count(*)::int AS referrals, max(j.referred_at) AS reached_at
+         FROM users j JOIN users r ON r.id = j.referred_by
+         WHERE j.face IS NOT NULL
+         GROUP BY r.id
+       )
+       SELECT t.*, row_number() OVER (ORDER BY referrals DESC, reached_at ASC NULLS LAST, id ASC)::int AS pos
+       FROM t ORDER BY pos LIMIT 100`,
+    ),
   ]);
 
   const meRow = dexRows.find((r) => r.id === meId);
@@ -85,6 +103,7 @@ export async function buildState(meId: number): Promise<AppState | null> {
       farcaster: r.farcaster,
       telegram: r.telegram,
       links: parseLinks(r.links),
+      referredBy: r.ref_username ? { username: r.ref_username, displayName: r.ref_name ?? r.ref_username } : undefined,
       caughtAt: r.caught_at ? new Date(r.caught_at).toISOString() : undefined,
       avatar: avatarOf(r),
       catchCount: Number(r.catch_count),
@@ -117,8 +136,20 @@ export async function buildState(meId: number): Promise<AppState | null> {
     avatar: visible.get(r.id),
   }));
 
+  const referrers = refRows.map((r) => ({
+    username: r.username,
+    displayName: r.display_name,
+    type: r.type as DevType,
+    type2: (r.type2 as DevType) || undefined,
+    referrals: Number(r.referrals),
+    rank: Number(r.pos),
+    isMe: r.id === meId,
+    avatar: visible.get(r.id),
+  }));
+
   return {
     caughtBy,
+    referrers,
     me: {
       no: meRow.no,
       username: meRow.username,
@@ -130,6 +161,8 @@ export async function buildState(meId: number): Promise<AppState | null> {
       farcaster: meRow.farcaster,
       telegram: meRow.telegram,
       links: parseLinks(meRow.links),
+      referredBy: meRow.ref_username ? { username: meRow.ref_username, displayName: meRow.ref_name ?? meRow.ref_username } : undefined,
+      referrals: Number(meRow.referrals),
       catchable: meRow.catchable,
       avatar: avatarOf(meRow),
       catchCount: myCatches,

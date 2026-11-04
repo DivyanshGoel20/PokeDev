@@ -162,7 +162,7 @@ export default function Home({
         </div>
         {recent.length === 0 ? (
           <div className="dialog">
-            Find someone wearing a PokeDev smile, open the camera and throw a DevBall at them. Your first catch shows up here!
+            No catches yet. Open the camera, point it at another player and throw the DevBall. Everyone you catch shows up here.
           </div>
         ) : (
           <div className="hscroll">

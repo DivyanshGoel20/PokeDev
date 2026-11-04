@@ -5,7 +5,7 @@ import QRCode from "qrcode";
 import { ScannerProgressText } from "./PreloadScanner";
 import { postJSON } from "@/lib/client";
 import { sfx } from "@/lib/sfx";
-import { FRONTAL_MIN, builderTitle, type DexEntry } from "@/lib/types";
+import { FRONTAL_MIN, SAME_FACE_FRAMES, builderTitle, type DexEntry } from "@/lib/types";
 import { Icon, Portrait, TypeBadge, dexNo } from "./ui";
 import { DevBall } from "./DevBall";
 
@@ -261,7 +261,7 @@ export default function CatchGame({
           if (list.length >= 3) {
             const m = meanDescriptor(list);
             const worst = list.reduce((a, b) => (distance(a, m) > distance(b, m) ? a : b));
-            if (distance(worst, m) > 0.25) use = list.filter((s) => s !== worst);
+            if (distance(worst, m) > SAME_FACE_FRAMES * 0.6) use = list.filter((s) => s !== worst);
           }
           return meanDescriptor(use);
         };
@@ -1054,7 +1054,15 @@ function CaughtModal({ entry, fresh, onContinue, onOpen }: { entry: DexEntry; fr
 
 const INVITE_MS = 30 * 60 * 1000;
 
-function NotLiveModal({ token, inviter, onContinue }: { token: string | null; inviter: string; onContinue: () => void }) {
+function NotLiveModal({
+  token,
+  inviter,
+  onContinue,
+}: {
+  token: string | null;
+  inviter: string;
+  onContinue: () => void;
+}) {
   const [svg, setSvg] = useState("");
   const [expires] = useState(() => Date.now() + INVITE_MS);
   const [now, setNow] = useState(() => Date.now());
@@ -1092,6 +1100,7 @@ function NotLiveModal({ token, inviter, onContinue }: { token: string | null; in
           </div>
           This builder isn&apos;t on PokeDev. Onboard them now or they&apos;ll be lost! Let them scan this
           {token ? ", and they're yours the moment they finish signing up." : "."}
+
         </div>
         <div
           className="pop"

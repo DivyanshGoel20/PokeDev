@@ -33,6 +33,11 @@ export default function EntrySheet({ entry: e, onClose }: { entry: DexEntry; onC
           <div className="muted" style={{ fontWeight: 600, marginTop: 2 }}>
             {known ? `@${e.username} · ${builderTitle(e.type, e.type2)}` : builderTitle(e.type, e.type2)}
           </div>
+          {known && e.referredBy && (
+            <div className="small muted" style={{ marginTop: 4, fontWeight: 600 }}>
+              Joined via @{e.referredBy.username}&apos;s invite
+            </div>
+          )}
           <div style={{ marginTop: 12 }}>
             <TypeBadge type={e.type} type2={e.type2} />
           </div>

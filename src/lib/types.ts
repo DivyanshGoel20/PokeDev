@@ -23,6 +23,11 @@ export type Link = { label: string; url: string };
 export const MAX_LINKS = 5;
 export const TYPE_KEYS = Object.keys(TYPES) as DevType[];
 
+/** Sign-up / recovery anti-impersonation: the head has to turn at least this far (face-on score at or below) once. */
+export const LIVENESS = { TURN_FRONTAL: 0.5 } as const;
+/** Two frames of the same, steady face are closer than this. */
+export const SAME_FACE_FRAMES = 0.5;
+
 /** Each player has 1 or 2 builder types. */
 export const MAX_TYPES = 2;
 
@@ -50,6 +55,8 @@ export type DexEntry = {
   farcaster?: string;
   telegram?: string;
   links?: Link[];
+  /** who brought this player into PokeDev (their invite QR) */
+  referredBy?: { username: string; displayName: string };
   caughtAt?: string;
   /** Profile picture URL (only for yourself and players you have caught). */
   avatar?: string;
@@ -70,6 +77,9 @@ export type Me = {
   farcaster: string;
   telegram: string;
   links: Link[];
+  referredBy?: { username: string; displayName: string };
+  /** how many players joined from my invites */
+  referrals: number;
   catchable: boolean;
   avatar?: string;
   catchCount: number;
@@ -80,7 +90,10 @@ export type Me = {
 /** Someone who caught you. If you've caught them too, `no` points to their dex entry. */
 export type CaughtBy = { displayName: string; username: string; type: DevType; type2?: DevType; at: string; no: number; caughtBack: boolean; avatar?: string };
 
-export type AppState = { me: Me; dex: DexEntry[]; ranks: RankRow[]; caughtBy: CaughtBy[] };
+/** Referral leaderboard row: who brought the most builders into PokeDev. */
+export type ReferrerRow = { username: string; displayName: string; type: DevType; type2?: DevType; referrals: number; rank: number; isMe: boolean; avatar?: string };
+
+export type AppState = { me: Me; dex: DexEntry[]; ranks: RankRow[]; caughtBy: CaughtBy[]; referrers: ReferrerRow[] };
 
 
 /** Minimum "facing the camera" score (1 = straight on) to register or catch a face. */

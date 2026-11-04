@@ -1,11 +1,11 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { cameraErrorMessage, describeFace, distance, loadFace, meanDescriptor, startCamera, stopCamera, type Box, type FaceRead } from "@/lib/face";
+import { cameraErrorMessage, describeFace, detectBoxes, distance, loadFace, meanDescriptor, startCamera, stopCamera, type Box, type FaceRead } from "@/lib/face";
 import { postJSON } from "@/lib/client";
 import { DevBall } from "@/components/DevBall";
 import { Lid } from "@/components/ui";
 import { ScannerProgressText } from "@/components/PreloadScanner";
-import { FRONTAL_MIN_SCAN } from "@/lib/types";
+import { FRONTAL_MIN_SCAN, LIVENESS, SAME_FACE_FRAMES } from "@/lib/types";
 
 const SAMPLES = 5;
 type Phase = "intro" | "loading" | "scanning" | "saving" | "done" | "error";
@@ -15,6 +15,7 @@ export default function FaceScan({
   hasFace,
   name,
   mode = "register",
+  upgrade = false,
   password,
   username,
   onBack,
@@ -24,6 +25,8 @@ export default function FaceScan({
   name: string;
   /** "recover": find the account that owns this face and give it a new passcode. */
   mode?: "register" | "recover";
+  /** existing player re-scanning with the new scanner */
+  upgrade?: boolean;
   password?: string;
   username?: string;
   onBack?: () => void;
@@ -105,7 +108,9 @@ export default function FaceScan({
         else if (f.score < 0.45) setHint("Hold still. A bit more light helps");
         else {
           // Keep samples consistent (same person, steady); a wild one restarts the count.
-          if (samples.length >= 2 && distance(meanDescriptor(samples), f.descriptor) > 0.5) samples.length = 0;
+          if (samples.length >= 2 && distance(meanDescriptor(samples), f.descriptor) > SAME_FACE_FRAMES) {
+            samples.length = 0;
+          }
           samples.push(f.descriptor);
           setProgress(samples.length / SAMPLES);
           setHint(samples.length < SAMPLES ? "Perfect, hold still..." : "Got it!");
@@ -114,6 +119,35 @@ export default function FaceScan({
       await new Promise((r) => setTimeout(r, 60));
     }
     if (!runningRef.current) return;
+
+    // Anti-impersonation: a quick head turn (a printed photo can't do this).
+    setProgress(1);
+    setHint("Last step: slowly turn your head to one side ↔");
+    const turnUntil = performance.now() + 20_000;
+    let turned = false;
+    while (runningRef.current && performance.now() < turnUntil) {
+      const faces = await detectBoxes(video).catch(() => []);
+      const ref = last;
+      const f = ref
+        ? faces.find((x) => Math.hypot(x.x + x.width / 2 - (ref.x + ref.width / 2), x.y + x.height / 2 - (ref.y + ref.height / 2)) < ref.width * 1.5)
+        : faces[0];
+      if (f) last = f;
+      if (f && f.frontal <= LIVENESS.TURN_FRONTAL) {
+        turned = true;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 40));
+    }
+    if (!runningRef.current) return;
+    if (!turned) {
+      runningRef.current = false;
+      stopCamera(streamRef.current);
+      setError("We didn't see your head turn. Tap Try again, look at the camera, then slowly turn your head to the side.");
+      setPhase("error");
+      return;
+    }
+    setHint("Got it!");
+
     runningRef.current = false;
     stopCamera(streamRef.current);
     setPhase("saving");
@@ -224,7 +258,9 @@ export default function FaceScan({
             <div className="dialog">
               {recover
                 ? "Now look at the camera. If your face matches your account, it gets the new passcode and you're back in."
-                : isNew
+                : upgrade
+                  ? "PokeDev has a new, much more accurate face scanner! Re-scan your face once (about 5 seconds) so other players can catch you."
+                  : isNew
                   ? `Last step, ${name.split(" ")[0]}! Let's scan your face so other trainers can catch you.`
                   : "Let's rescan your face. Use good light and hold your phone at eye level."}
             </div>
@@ -237,7 +273,10 @@ export default function FaceScan({
                   <span className="num-dot">2</span>Fit your face in the circle and hold still for about 3 seconds.
                 </li>
                 <li>
-                  <span className="num-dot">3</span>No photo is stored, just a 128-number fingerprint you can delete anytime.
+                  <span className="num-dot">3</span>Then slowly turn your head to one side. (This stops anyone using a photo of you.)
+                </li>
+                <li>
+                  <span className="num-dot">4</span>No photo is stored, just a face fingerprint (numbers) you can delete anytime.
                 </li>
               </ul>
             </div>

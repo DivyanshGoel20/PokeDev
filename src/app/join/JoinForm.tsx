@@ -58,7 +58,7 @@ export default function JoinForm() {
     if (Object.keys(e2).length) return fail(e2);
     setErrs({});
     setBusy(true);
-    const r = await postJSON("/api/signup", { username, password, ...profile, invite: invite?.token });
+    const r = await postJSON("/api/signup", { username, password, ...profile, invite: invite?.token, ref });
     if (r.error) {
       setBusy(false);
       if (/username/i.test(r.error)) {

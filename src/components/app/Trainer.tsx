@@ -116,6 +116,11 @@ export default function Trainer({ state, refresh, onInvite }: { state: AppState;
                   <div className="muted small" style={{ fontWeight: 600, marginTop: 2 }}>
                     @{me.username}
                   </div>
+                  {me.referredBy && (
+                    <div className="muted small" style={{ marginTop: 2 }}>
+                      Joined via @{me.referredBy.username}&apos;s invite
+                    </div>
+                  )}
                   <div style={{ marginTop: 12 }}>
                     <TypeBadge type={me.type} type2={me.type2} />
                   </div>
@@ -133,11 +138,12 @@ export default function Trainer({ state, refresh, onInvite }: { state: AppState;
                   <div style={{ marginTop: 6 }}>{me.building}</div>
                 </div>
               )}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", borderTop: "2px dashed var(--line)" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", borderTop: "2px dashed var(--line)" }}>
                 {[
                   ["CAUGHT", me.catchCount],
                   ["TIMES CAUGHT", me.caughtCount],
                   ["RANK", me.catchCount ? `#${me.rank}` : "-"],
+                  ["INVITED", me.referrals],
                 ].map(([l, v]) => (
                   <div key={l} style={{ padding: "12px 8px", textAlign: "center" }}>
                     <div className="px" style={{ fontSize: 14 }}>
