@@ -41,6 +41,21 @@ function setProgress(p: number) {
   progressListeners.forEach((cb) => cb(p));
 }
 /** Download the model files into the browser cache, reporting progress (they're cached for a year). */
+let fetching: Promise<void> | null = null;
+/**
+ * Download only (no heavy work on the main thread), safe to call while someone fills in a form.
+ * Used on entry pages so the scanner is ready when they reach it. Retries after a failure.
+ */
+export function preloadScanner(): Promise<void> {
+  if (!fetching) {
+    fetching = prefetchModels().catch((e) => {
+      fetching = null;
+      throw e;
+    });
+  }
+  return fetching;
+}
+
 async function prefetchModels() {
   const total = MODEL_FILES.reduce((a, [, n]) => a + n, 0);
   let done = 0;
@@ -67,7 +82,7 @@ export function loadFace(): Promise<FaceApi> {
   if (!loading) {
     loading = withTimeout(60_000, "The face scanner took too long to load. Check your connection and try again.", async () => {
       const faceapi = (await import("@vladmandic/face-api")) as FaceApi;
-      await prefetchModels();
+      await preloadScanner();
       // The bundled tfjs is typed loosely; setBackend/ready exist at runtime.
       const tf = faceapi.tf as unknown as { setBackend(b: string): Promise<boolean>; ready(): Promise<void> };
       // WebGL on every modern phone; plain CPU otherwise (we don't ship the wasm backend).
@@ -324,7 +339,23 @@ export function meanDescriptor(list: number[][]) {
 /* ---------------- camera ---------------- */
 
 export function startCamera(video: HTMLVideoElement, facing: "user" | "environment"): Promise<MediaStream> {
-  return withTimeout(15_000, "The camera didn't start. Tap Try again (and allow camera access if asked).", () => openCamera(video, facing));
+  const opening = openCamera(video, facing);
+  return withTimeout(15_000, "The camera didn't start. Tap Try again (and allow camera access if asked).", () => opening).catch((e) => {
+    opening.then(stopCamera, () => {}); // if it starts after we gave up, don't leave the camera on
+    throw e;
+  });
+}
+
+/** Camera + face models together; if either fails the camera is released, ready for Try again. */
+export async function startScanner(video: HTMLVideoElement, facing: "user" | "environment"): Promise<MediaStream> {
+  const camera = startCamera(video, facing);
+  try {
+    const [stream] = await Promise.all([camera, loadFace()]);
+    return stream;
+  } catch (e) {
+    camera.then(stopCamera, () => {});
+    throw e;
+  }
 }
 
 async function openCamera(video: HTMLVideoElement, facing: "user" | "environment") {

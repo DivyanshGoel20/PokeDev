@@ -5,7 +5,7 @@ import { cleanPhoto, profileFields } from "@/lib/users";
 import { clientIp, rateLimit } from "@/lib/ratelimit";
 
 export async function POST(req: Request) {
-  const limited = await rateLimit(`signup-ip:${clientIp(req)}`, 60, 3600);
+  const limited = await rateLimit(`signup-ip:${clientIp(req)}`, 300, 3600);
   if (limited) return limited;
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   const username = typeof body.username === "string" ? body.username.trim().toLowerCase() : "";

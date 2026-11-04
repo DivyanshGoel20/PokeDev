@@ -3,7 +3,7 @@ import { q } from "./db";
 import { nearestFaces } from "./users";
 import { MATCH } from "./types";
 
-export type CatchOutcome = { result: "caught" | "already" | "nomatch" | "hidden" | "self" | "unclear"; username?: string };
+export type CatchOutcome = { result: "caught" | "already" | "nomatch" | "unknown" | "hidden" | "self" | "unclear"; username?: string };
 
 /**
  * Compare a face descriptor against registered players and record a catch on a match.
@@ -12,14 +12,15 @@ export type CatchOutcome = { result: "caught" | "already" | "nomatch" | "hidden"
  * - With the back camera the catcher is behind the phone, so they are never a candidate:
  *   their own fingerprint is left out entirely (this is what used to cause a false "That's you").
  * - "self" is only possible on the front (selfie) camera, and only on a confident match.
- * - "nomatch" ("not on PokeDev yet") only when the face is clearly far from every player;
- *   borderline cases return "unclear" so nobody is mis-caught or wrongly told they're missing.
+ * - "nomatch" ("not on PokeDev yet") only when the face is clearly far from every player.
+ * - "unclear": close to a player but ambiguous; a better look should settle it.
+ * - "unknown": can't tell a non-player from a poor reading, so the app offers both options
+ *   and claims neither. Nobody is mis-caught or wrongly told they're missing.
  */
 export async function tryCatch(meId: number, descriptor: number[], opts: { selfie?: boolean } = {}): Promise<CatchOutcome> {
   const confident = (d: number, margin: number) =>
     (d <= MATCH.STRONG && margin >= MATCH.STRONG_MARGIN) ||
-    (d <= MATCH.LOOSE && margin >= MATCH.LOOSE_MARGIN) ||
-    (d <= MATCH.CLEAR && margin >= MATCH.CLEAR_MARGIN);
+    (d <= MATCH.LOOSE && margin >= MATCH.LOOSE_MARGIN);
 
   if (opts.selfie) {
     const [b, r] = await nearestFaces(descriptor, 2);
@@ -32,7 +33,7 @@ export async function tryCatch(meId: number, descriptor: number[], opts: { selfi
   // Distances only (no face data): lets us tune the thresholds on real catches.
   console.log(JSON.stringify({ ev: "catch", d: Number.isFinite(d) ? +d.toFixed(3) : null, margin: Number.isFinite(margin) ? +margin.toFixed(3) : null }));
   if (!best || d > MATCH.UNSURE) return { result: "nomatch" };
-  if (!confident(d, margin)) return { result: "unclear" };
+  if (!confident(d, margin)) return { result: d <= MATCH.NEAR ? "unclear" : "unknown" };
   if (!best.catchable) return { result: "hidden" };
 
   const inserted = await q(

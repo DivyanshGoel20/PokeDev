@@ -80,7 +80,7 @@ export default function EntrySheet({ entry: e, onClose }: { entry: DexEntry; onC
             : "No data. Find this builder at Devcon and catch them to unlock their entry."}
         </div>
 
-        {known && !e.isMe && (e.xHandle || e.farcaster || e.telegram || e.links?.length) && (
+        {known && !e.isMe && (e.xHandle || e.farcaster || e.telegram || (e.links?.length ?? 0) > 0) && (
           <div className="stack" style={{ marginTop: 16 }}>
             {e.xHandle && <Social href={`https://x.com/${e.xHandle}`} label="X" handle={`@${e.xHandle}`} />}
             {e.farcaster && <Social href={`https://farcaster.xyz/${e.farcaster}`} label="Farcaster" handle={e.farcaster} />}

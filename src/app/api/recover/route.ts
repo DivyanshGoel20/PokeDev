@@ -10,7 +10,7 @@ import { RECOVER } from "@/lib/types";
  * that account gets the new passcode and you're signed in. All other sessions are signed out.
  */
 export async function POST(req: Request) {
-  const limited = await rateLimit(`recover-ip:${clientIp(req)}`, 15, 3600);
+  const limited = await rateLimit(`recover-ip:${clientIp(req)}`, 60, 3600);
   if (limited) return limited;
 
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;

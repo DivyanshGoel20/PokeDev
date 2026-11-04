@@ -126,13 +126,17 @@ export function ProfileFields({
 }) {
   const set = (k: keyof Profile) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     onChange({ ...value, [k]: e.target.value });
+  // The picture is processed asynchronously: merge it into the form as it is THEN, not as it was
+  // when the file was chosen, or everything typed in between would be lost.
+  const latest = useRef(value);
+  latest.current = value;
   const [tooMany, setTooMany] = useState(false);
   const picked = [value.type, value.type2].filter(Boolean).length;
   if (tooMany && picked < 2) setTooMany(false);
 
   return (
     <>
-      <AvatarPicker value={value.avatar} onChange={(avatar) => onChange({ ...value, avatar })} />
+      <AvatarPicker value={value.avatar} onChange={(avatar) => onChange({ ...latest.current, avatar })} />
       <div className="field" id="f-displayName" data-invalid={!!errors.displayName}>
         <label htmlFor="in-displayName">
           Your name<span className="req">*</span>

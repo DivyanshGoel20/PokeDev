@@ -1,11 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
-import { loadFace, onScannerProgress } from "@/lib/face";
+import { onScannerProgress, preloadScanner } from "@/lib/face";
 
 /** Start downloading the face scanner in the background, so it's ready by the time it's needed. */
 export function PreloadScanner() {
   useEffect(() => {
-    const start = () => loadFace().catch(() => {});
+    const start = () => preloadScanner().catch(() => {});
     const w = window as Window & { requestIdleCallback?: (cb: () => void) => number };
     const id = window.setTimeout(() => (w.requestIdleCallback ? w.requestIdleCallback(start) : start()), 300);
     return () => window.clearTimeout(id);

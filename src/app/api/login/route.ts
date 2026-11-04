@@ -9,7 +9,7 @@ export async function POST(req: Request) {
   const password = typeof body.password === "string" ? body.password : "";
   // Shared venue Wi-Fi puts many people behind one IP, so the IP limit is generous;
   // the per-username limit is what stops passcode guessing.
-  const ipLimited = await rateLimit(`login-ip:${clientIp(req)}`, 150, 600);
+  const ipLimited = await rateLimit(`login-ip:${clientIp(req)}`, 400, 600);
   if (ipLimited) return ipLimited;
   // Only wrong passcodes count towards the per-username limit.
   if (await isLimited(`login-fail:${username}`, 8, 600))

@@ -106,14 +106,17 @@ export const FRONTAL_MIN_SCAN = 0.6;
  * - LOOSE: accepted only when clearly closer than everyone else.
  * - Up to UNSURE we never claim "not a player"; we ask for a better look instead.
  */
-// Tuned on real players at Devcon: different people's fingerprints were 0.54-0.70 apart,
-// so a confident match must sit well below that and clearly closer than anyone else.
-// The catcher is never a candidate on the back camera, so a clear margin over everyone else is
-// what protects against wrong catches; readings from other phones in hall light land ~0.45-0.55.
-// Real catches at Devcon: correct matches sit at 0.29-0.39 with a 0.13+ gap to the next player;
-// readings where two players are almost equally close (gap < 0.05) are the ones that went wrong.
-export const MATCH = { STRONG: 0.4, STRONG_MARGIN: 0.06, LOOSE: 0.44, LOOSE_MARGIN: 0.1, CLEAR: 0, CLEAR_MARGIN: 1, UNSURE: 0.62 } as const;
-/** Registering a face this close to another player's is refused (one face, one account). */
-export const DUPLICATE_FACE = 0.45;
+// Measured on real Devcon players (36 fingerprints + real catch logs):
+//  - correct catches: distance 0.29-0.39, with a gap of 0.13+ to the next player;
+//  - different people: as close as 0.45, median 0.65;
+//  - a stranger's nearest player: 0.45-0.61, with a tiny gap (median 0.017) to the next one.
+// So: STRONG/LOOSE = confident catch. Up to NEAR = probably a player, ask for a better look.
+// NEAR..UNSURE = can't tell a stranger from a poor reading: offer both options. Above UNSURE = nobody.
+export const MATCH = { STRONG: 0.4, STRONG_MARGIN: 0.06, LOOSE: 0.44, LOOSE_MARGIN: 0.1, NEAR: 0.45, UNSURE: 0.62 } as const;
+/**
+ * Registering a face this close to another player's is refused (one face, one account).
+ * Well below the 0.45 where different real people start, so new players aren't falsely blocked.
+ */
+export const DUPLICATE_FACE = 0.4;
 /** Passcode recovery by face: stricter than catching, and clearly closer than anyone else. */
 export const RECOVER = { MAX: 0.38, MARGIN: 0.1 } as const;

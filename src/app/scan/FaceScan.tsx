@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { cameraErrorMessage, describeFace, detectBoxes, distance, loadFace, meanDescriptor, startCamera, stopCamera, type Box, type FaceRead } from "@/lib/face";
+import { cameraErrorMessage, describeFace, detectBoxes, distance, loadFace, meanDescriptor, startScanner, stopCamera, type Box, type FaceRead } from "@/lib/face";
 import { postJSON } from "@/lib/client";
 import { DevBall } from "@/components/DevBall";
 import { Lid } from "@/components/ui";
@@ -29,6 +29,7 @@ export default function FaceScan({
   onBack?: () => void;
 }) {
   const recover = mode === "recover";
+  const firstTime = isNew || !hasFace; // never completed a scan on this account
   const [duplicate, setDuplicate] = useState(false);
   const [dupHint, setDupHint] = useState("");
   const [recovered, setRecovered] = useState("");
@@ -53,8 +54,7 @@ export default function FaceScan({
     setProgress(0);
     setPhase("loading");
     try {
-      const [stream] = await Promise.all([startCamera(videoRef.current!, "user"), loadFace()]);
-      streamRef.current = stream;
+      streamRef.current = await startScanner(videoRef.current!, "user");
     } catch (e) {
       setError(cameraErrorMessage(e));
       setPhase("error");
@@ -179,7 +179,12 @@ export default function FaceScan({
       ) : isNew ? (
         <Lid title="NEW TRAINER" subtitle="Step 3 of 3" big={false} />
       ) : (
-        <Lid title="FACE SCAN" subtitle="Update your fingerprint" backHref={hasFace ? "/#me" : "/"} big={false} />
+        <Lid
+          title="FACE SCAN"
+          subtitle={hasFace ? "Update your fingerprint" : "Last step to start playing"}
+          backHref={hasFace ? "/#me" : undefined}
+          big={false}
+        />
       )}
       <main className="wrap plain">
         {isNew && (
@@ -255,7 +260,7 @@ export default function FaceScan({
             <div className="dialog">
               {recover
                 ? "Now look at the camera. If your face matches your account, it gets the new passcode and you're back in."
-                : isNew
+                : firstTime
                   ? `Last step, ${name.split(" ")[0]}! Let's scan your face so other trainers can catch you.`
                   : "Let's rescan your face. Use good light and hold your phone at eye level."}
             </div>
@@ -278,6 +283,18 @@ export default function FaceScan({
             <button className="btn btn-red" style={{ marginTop: 18 }} onClick={begin}>
               Start face scan
             </button>
+            {!recover && !hasFace && (
+              <button
+                className="btn btn-quiet"
+                style={{ marginTop: 10 }}
+                onClick={async () => {
+                  await postJSON("/api/logout", {});
+                  window.location.replace("/");
+                }}
+              >
+                Not now: log out
+              </button>
+            )}
           </div>
         )}
 
@@ -299,7 +316,7 @@ export default function FaceScan({
                   That&apos;s me: use my existing account
                 </button>
                 <button className="btn btn-quiet" onClick={begin}>
-                  Scan again
+                  Not me: scan again
                 </button>
               </div>
             ) : (
@@ -316,20 +333,20 @@ export default function FaceScan({
               <div className="lcd" style={{ padding: "30px 16px" }}>
                 <DevBall size={96} className="pop" />
                 <div className="px" style={{ fontSize: 14, marginTop: 22, lineHeight: 1.5 }}>
-                  {recover ? "WELCOME BACK!" : isNew ? "REGISTERED!" : "UPDATED!"}
+                  {recover ? "WELCOME BACK!" : firstTime ? "REGISTERED!" : "UPDATED!"}
                 </div>
               </div>
             </div>
             <div className="dialog" style={{ marginTop: 14, textAlign: "left" }}>
               {recover
                 ? `You're back in as @${recovered}. Your new passcode is set, and any other logins were signed out.`
-                : isNew
+                : firstTime
                   ? "Your journey begins! Find other builders and throw a DevBall at them."
                   : "Your face fingerprint was updated."}
             </div>
             {/* full page load (fresh server state), replacing history so Back doesn't return to the scan */}
-            <button className="btn btn-red" style={{ marginTop: 18 }} onClick={() => window.location.replace(isNew || recover ? "/" : "/#me")}>
-              {recover ? "Continue" : isNew ? "Let's go!" : "Back to PokeDev"}
+            <button className="btn btn-red" style={{ marginTop: 18 }} onClick={() => window.location.replace(firstTime || recover ? "/" : "/#me")}>
+              {recover ? "Continue" : firstTime ? "Let's go!" : "Back to PokeDev"}
             </button>
           </div>
         )}

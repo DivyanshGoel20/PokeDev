@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { cameraErrorMessage, coverMap, describeFace, detectBoxes, distance, loadFace, meanDescriptor, startCamera, stopCamera, type Box, type TrackedFace } from "@/lib/face";
+import { cameraErrorMessage, coverMap, describeFace, detectBoxes, distance, meanDescriptor, startScanner, stopCamera, type Box, type TrackedFace } from "@/lib/face";
 import QRCode from "qrcode";
 import { ScannerProgressText } from "./PreloadScanner";
 import { postJSON } from "@/lib/client";
@@ -50,7 +50,7 @@ function updateTracks(prev: Track[], dets: TrackedFace[], now: number): Track[] 
   return out;
 }
 
-type CatchResult = "caught" | "already" | "nomatch" | "hidden" | "self" | "unclear" | "side" | "far" | "error";
+type CatchResult = "caught" | "already" | "nomatch" | "unknown" | "hidden" | "self" | "unclear" | "side" | "far" | "error";
 type ApiResult = { result?: CatchResult; username?: string; error?: string };
 
 type Particle = { x: number; y: number; vx: number; vy: number; life: number; max: number; color: string; size: number; star?: boolean };
@@ -73,8 +73,7 @@ const DROP = 340;
 const WOBBLE = 640;
 const MIN_WOBBLES = 3;
 
-const MESSAGES: Record<Exclude<CatchResult, "caught" | "already">, string> = {
-  nomatch: "Oh no! It broke free! This builder isn't a PokeDev player yet. Tell them to join!",
+const MESSAGES: Record<Exclude<CatchResult, "caught" | "already" | "nomatch" | "unknown">, string> = {
   hidden: "This builder is in hide mode right now. Try again later!",
   self: "That's you! You can't catch yourself.",
   unclear: "Almost! Couldn't get a clear enough look. Get closer, face to face, in good light, and throw again.",
@@ -106,7 +105,7 @@ export default function CatchGame({
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
   const [modal, setModal] = useState<{ entry: DexEntry; fresh: boolean } | null>(null);
-  const [notLive, setNotLive] = useState<{ token: string | null } | null>(null);
+  const [notLive, setNotLive] = useState<{ token: string | null; unsure: boolean } | null>(null);
   const [locked, setLocked] = useState(false); // a target is locked on
   const [focusFacing, setFocusFacing] = useState(true); // ...and it's face-on
   const [lonely, setLonely] = useState(false); // no face found for a while
@@ -138,7 +137,7 @@ export default function CatchGame({
     (async () => {
       try {
         stopCamera(streamRef.current);
-        const [stream] = await Promise.all([startCamera(videoRef.current!, facing), loadFace()]);
+        const stream = await startScanner(videoRef.current!, facing);
         if (cancelled) return stopCamera(stream);
         streamRef.current = stream;
         g.current.mirrored = facing === "user";
@@ -269,7 +268,7 @@ export default function CatchGame({
           postJSON<ApiResult>("/api/catch", { descriptor: blend(samples), facing: g.current.mirrored ? "user" : "environment" });
 
         let r = await ask();
-        if (r.result === "unclear") {
+        if (r.result === "unclear" || r.result === "unknown") {
           // Borderline: take a second look (a few more frames, averaged with the first ones)
           // while the ball is still wobbling, before bothering the player with a message.
           const more = performance.now() + 1800;
@@ -288,11 +287,11 @@ export default function CatchGame({
         } else if ((r.result === "caught" || r.result === "already") && r.username) {
           const entry = await onCaught(r.username);
           g.current.result = { ...r, entry };
-        } else if (r.result === "nomatch") {
+        } else if (r.result === "nomatch" || r.result === "unknown") {
           // Clearly not a player: nothing about them is kept. Create a one-time invite so that if
           // they join right now from your QR code, the catch is yours.
           const inv = await postJSON<{ token?: string }>("/api/invite", {});
-          g.current.result = { result: "nomatch", invite: inv.token ?? null };
+          g.current.result = { result: r.result, invite: inv.token ?? null };
         } else {
           g.current.result = r;
         }
@@ -727,9 +726,9 @@ export default function CatchGame({
           ctx.globalAlpha = 1;
           if (t >= 1) {
             const res = S.result;
-            if (res?.result === "nomatch") {
+            if (res?.result === "nomatch" || res?.result === "unknown") {
               S.modalOpen = true;
-              setNotLive({ token: res.invite ?? null });
+              setNotLive({ token: res.invite ?? null, unsure: res.result === "unknown" });
             } else {
               if (res?.result === "error" && res.error === "Not signed in") {
                 window.location.replace("/login"); // session ended: log in again instead of a confusing message
@@ -942,7 +941,7 @@ export default function CatchGame({
         </div>
       )}
 
-      {notLive && <NotLiveModal token={notLive.token} inviter={inviter} onContinue={closeModal} />}
+      {notLive && <NotLiveModal token={notLive.token} unsure={notLive.unsure} inviter={inviter} onContinue={closeModal} />}
 
       {modal && (
         <CaughtModal
@@ -1062,10 +1061,13 @@ const INVITE_MS = 30 * 60 * 1000;
 
 function NotLiveModal({
   token,
+  unsure,
   inviter,
   onContinue,
 }: {
   token: string | null;
+  /** couldn't tell a non-player from a poor reading: offer both options, claim neither */
+  unsure: boolean;
   inviter: string;
   onContinue: () => void;
 }) {
@@ -1102,10 +1104,20 @@ function NotLiveModal({
       <div style={{ maxWidth: 420, width: "100%", margin: "0 auto" }}>
         <div className="dialog pop">
           <div className="px" style={{ fontSize: 10, color: "var(--red)", marginBottom: 8 }}>
-            NOT LIVE YET
+            {unsure ? "WHO'S THIS?" : "NOT LIVE YET"}
           </div>
-          This builder isn&apos;t on PokeDev. Onboard them now or they&apos;ll be lost! Let them scan this
-          {token ? ", and they're yours the moment they finish signing up." : "."}
+          {unsure ? (
+            <>
+              Couldn&apos;t recognise this builder. Not on PokeDev yet? Let them scan this
+              {token ? ", and they're yours the moment they finish signing up." : "."}
+              <span style={{ display: "block", marginTop: 8 }}>Already playing? Get closer, face to face, and throw again.</span>
+            </>
+          ) : (
+            <>
+              This builder isn&apos;t on PokeDev. Onboard them now or they&apos;ll be lost! Let them scan this
+              {token ? ", and they're yours the moment they finish signing up." : "."}
+            </>
+          )}
 
         </div>
         <div

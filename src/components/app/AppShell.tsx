@@ -98,29 +98,38 @@ export default function AppShell({ initial }: { initial: AppState }) {
   }, [state.dex, state.me.username]);
 
   /* ---------- "someone caught you" banner ---------- */
+  const seenCaught = useRef<number | null>(null); // falls back to memory if storage is blocked
   useEffect(() => {
     const latest = state.caughtBy[0];
-    if (!latest) return;
-    let seen = 0;
+    const t = latest ? Date.parse(latest.at) : 0;
+    if (seenCaught.current === null) {
+      let stored = 0;
+      try {
+        stored = Number(localStorage.getItem(SEEN_KEY) || 0);
+      } catch {
+        /* ignore */
+      }
+      // First time on this phone: don't replay old catches, but do announce every new one from now on.
+      seenCaught.current = stored || t || 1;
+    }
+    const seen = seenCaught.current;
     try {
-      seen = Number(localStorage.getItem(SEEN_KEY) || 0);
+      localStorage.setItem(SEEN_KEY, String(Math.max(seen, t)));
     } catch {
       /* ignore */
     }
-    const t = Date.parse(latest.at);
-    if (t <= seen) return;
-    try {
-      localStorage.setItem(SEEN_KEY, String(t));
-    } catch {
-      /* ignore */
-    }
-    if (!seen) return; // first load on this phone: don't replay old catches
+    if (!latest || t <= seen) return;
+    seenCaught.current = t;
     const fresh = state.caughtBy.filter((c) => Date.parse(c.at) > seen);
-    setBanner({
-      title: fresh.length > 1 ? `You were caught ${fresh.length} times!` : `${latest.displayName} caught you!`,
-      body: latest.caughtBack ? "You've already caught them. Nice." : "Catch them back before they get away!",
-      action: latest.caughtBack ? undefined : "catch",
-    });
+    setBanner(
+      fresh.length > 1
+        ? { title: `You were caught ${fresh.length} times!`, body: "See who caught you on Home.", action: undefined }
+        : {
+            title: `${latest.displayName} caught you!`,
+            body: latest.caughtBack ? "You've already caught them. Nice." : "Catch them back before they get away!",
+            action: latest.caughtBack ? undefined : "catch",
+          },
+    );
   }, [state.caughtBy]);
 
   useEffect(() => {
