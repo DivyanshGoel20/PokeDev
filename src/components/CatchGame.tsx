@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { cameraErrorMessage, coverMap, describeFaces, detectBoxes, distance, loadFace, meanDescriptor, startCamera, stopCamera, type Box, type TrackedFace } from "@/lib/face";
+import { cameraErrorMessage, coverMap, describeFace, detectBoxes, distance, loadFace, meanDescriptor, startCamera, stopCamera, type Box, type TrackedFace } from "@/lib/face";
 import QRCode from "qrcode";
 import { postJSON } from "@/lib/client";
 import { sfx } from "@/lib/sfx";
@@ -226,31 +226,24 @@ export default function CatchGame({
       try {
         // Read the target's face over several frames while the ball flies and wobbles, and
         // average them: one frame is noisy, a few averaged frames match far more reliably.
-        let c = { x: target.x + target.width / 2, y: target.y + target.height / 2 };
-        let w = target.width;
+        // Read the locked face directly (zoomed crop around it), following it if it moves.
+        let box: Box = { ...target };
         const samples: number[][] = [];
         let sawFace = false;
         let sawFrontal = false;
         let tooSmall = false;
-        const deadline = performance.now() + 1700;
+        const deadline = performance.now() + 2200;
         while (samples.length < 4 && performance.now() < deadline) {
-          const faces = await describeFaces(v).catch(() => []);
-          let f: (typeof faces)[number] | null = null;
-          let bestD = Infinity;
-          for (const x of faces) {
-            const d = Math.hypot(x.box.x + x.box.width / 2 - c.x, x.box.y + x.box.height / 2 - c.y);
-            if (d < bestD && d < Math.max(w, 60) * 1.2) {
-              bestD = d;
-              f = x;
-            }
-          }
+          const f = await describeFace(v, box).catch(() => null);
           if (!f) continue;
+          // Must still be the same person we aimed at (not someone walking past).
+          const moved = Math.hypot(f.box.x + f.box.width / 2 - (box.x + box.width / 2), f.box.y + f.box.height / 2 - (box.y + box.height / 2));
+          if (moved > Math.max(box.width, 60) * 1.2) continue;
           sawFace = true;
-          c = { x: f.box.x + f.box.width / 2, y: f.box.y + f.box.height / 2 };
-          w = f.box.width;
+          box = f.box;
           if (f.frontal < FRONTAL_MIN) continue; // side-on frames give unreliable fingerprints
           sawFrontal = true;
-          if (f.box.width < 80) {
+          if (f.box.width < 60) {
             tooSmall = true;
             continue;
           }
@@ -260,18 +253,34 @@ export default function CatchGame({
           g.current.result = { result: !sawFace ? "unclear" : !sawFrontal ? "side" : tooSmall ? "far" : "unclear" };
           return;
         }
-        // Drop an outlier frame (e.g. mid-blink or motion blur) before averaging.
-        let use = samples;
-        if (samples.length >= 3) {
-          const m = meanDescriptor(samples);
-          const worst = samples.reduce((a, b) => (distance(a, m) > distance(b, m) ? a : b));
-          if (distance(worst, m) > 0.25) use = samples.filter((s) => s !== worst);
-        }
+        // Average the frames, dropping an outlier (mid-blink, motion blur) first.
+        const blend = (list: number[][]) => {
+          let use = list;
+          if (list.length >= 3) {
+            const m = meanDescriptor(list);
+            const worst = list.reduce((a, b) => (distance(a, m) > distance(b, m) ? a : b));
+            if (distance(worst, m) > 0.25) use = list.filter((s) => s !== worst);
+          }
+          return meanDescriptor(use);
+        };
+        const ask = () =>
+          postJSON<ApiResult>("/api/catch", { descriptor: blend(samples), facing: g.current.mirrored ? "user" : "environment" });
 
-        const r = await postJSON<ApiResult>("/api/catch", {
-          descriptor: meanDescriptor(use),
-          facing: g.current.mirrored ? "user" : "environment",
-        });
+        let r = await ask();
+        if (r.result === "unclear") {
+          // Borderline: take a second look (a few more frames, averaged with the first ones)
+          // while the ball is still wobbling, before bothering the player with a message.
+          const more = performance.now() + 1800;
+          let added = 0;
+          while (added < 4 && performance.now() < more) {
+            const f = await describeFace(v, box).catch(() => null);
+            if (!f || f.frontal < FRONTAL_MIN || f.box.width < 60) continue;
+            box = f.box;
+            samples.push(f.descriptor);
+            added++;
+          }
+          if (added) r = await ask();
+        }
         if (r.error) {
           g.current.result = { result: "error", error: r.error };
         } else if ((r.result === "caught" || r.result === "already") && r.username) {

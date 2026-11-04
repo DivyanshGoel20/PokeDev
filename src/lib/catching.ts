@@ -17,7 +17,9 @@ export type CatchOutcome = { result: "caught" | "already" | "nomatch" | "hidden"
  */
 export async function tryCatch(meId: number, descriptor: number[], opts: { selfie?: boolean } = {}): Promise<CatchOutcome> {
   const confident = (d: number, margin: number) =>
-    (d <= MATCH.STRONG && margin >= MATCH.STRONG_MARGIN) || (d <= MATCH.LOOSE && margin >= MATCH.LOOSE_MARGIN);
+    (d <= MATCH.STRONG && margin >= MATCH.STRONG_MARGIN) ||
+    (d <= MATCH.LOOSE && margin >= MATCH.LOOSE_MARGIN) ||
+    (d <= MATCH.CLEAR && margin >= MATCH.CLEAR_MARGIN);
 
   if (opts.selfie) {
     const [b, r] = await nearestFaces(descriptor, 2);
@@ -25,9 +27,11 @@ export async function tryCatch(meId: number, descriptor: number[], opts: { selfi
   }
 
   const [best, runnerUp] = await nearestFaces(descriptor, 2, meId);
-  if (!best || Number(best.dist) > MATCH.UNSURE) return { result: "nomatch" };
-  const d = Number(best.dist);
+  const d = best ? Number(best.dist) : Infinity;
   const margin = runnerUp ? Number(runnerUp.dist) - d : Infinity;
+  // Distances only (no face data): lets us tune the thresholds on real catches.
+  console.log(JSON.stringify({ ev: "catch", d: Number.isFinite(d) ? +d.toFixed(3) : null, margin: Number.isFinite(margin) ? +margin.toFixed(3) : null }));
+  if (!best || d > MATCH.UNSURE) return { result: "nomatch" };
   if (!confident(d, margin)) return { result: "unclear" };
   if (!best.catchable) return { result: "hidden" };
 

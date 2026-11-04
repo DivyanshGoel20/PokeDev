@@ -85,7 +85,7 @@ export type AppState = { me: Me; dex: DexEntry[]; ranks: RankRow[]; caughtBy: Ca
 
 /** Minimum "facing the camera" score (1 = straight on) to register or catch a face. */
 export const FRONTAL_MIN = 0.55;
-export const FRONTAL_MIN_SCAN = 0.65;
+export const FRONTAL_MIN_SCAN = 0.6;
 
 /**
  * Face matching (euclidean distance between 128-number fingerprints; same person is usually < 0.45).
@@ -95,7 +95,9 @@ export const FRONTAL_MIN_SCAN = 0.65;
  */
 // Tuned on real players at Devcon: different people's fingerprints were 0.54-0.70 apart,
 // so a confident match must sit well below that and clearly closer than anyone else.
-export const MATCH = { STRONG: 0.42, STRONG_MARGIN: 0.05, LOOSE: 0.5, LOOSE_MARGIN: 0.1, UNSURE: 0.6 } as const;
+// The catcher is never a candidate on the back camera, so a clear margin over everyone else is
+// what protects against wrong catches; readings from other phones in hall light land ~0.45-0.55.
+export const MATCH = { STRONG: 0.45, STRONG_MARGIN: 0.04, LOOSE: 0.54, LOOSE_MARGIN: 0.08, CLEAR: 0.58, CLEAR_MARGIN: 0.1, UNSURE: 0.62 } as const;
 /** Registering a face this close to another player's is refused (one face, one account). */
 export const DUPLICATE_FACE = 0.45;
 /** Passcode recovery by face: stricter than catching, and clearly closer than anyone else. */

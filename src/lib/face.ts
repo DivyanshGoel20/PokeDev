@@ -187,6 +187,81 @@ export async function describeFaces(input: HTMLVideoElement | HTMLCanvasElement)
   }));
 }
 
+export type FaceRead = { box: Box; score: number; frontal: number; descriptor: number[] };
+
+const zoomCanvas = typeof document !== "undefined" ? document.createElement("canvas") : null;
+
+/**
+ * Read the fingerprint of the face inside `region` (video pixels): crop that area from the
+ * full-resolution frame and enlarge it, so the face is big and alone. Detection on a crop is far
+ * more reliable in dim or busy venues than searching the whole frame, and faster too.
+ * Tries the accurate detector first, then the fast one, with forgiving thresholds.
+ */
+async function readRegion(video: HTMLVideoElement, region: Box): Promise<FaceRead | null> {
+  const faceapi = await loadFace();
+  if (!zoomCanvas || !video.videoWidth) return null;
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+  const side = Math.max(region.width, region.height) * 2.2;
+  const cx = region.x + region.width / 2;
+  const cy = region.y + region.height / 2;
+  const sx = Math.max(0, Math.min(vw - 1, cx - side / 2));
+  const sy = Math.max(0, Math.min(vh - 1, cy - side / 2));
+  const sw = Math.max(1, Math.min(vw - sx, side));
+  const sh = Math.max(1, Math.min(vh - sy, side));
+  const OUT = 416;
+  const k = OUT / Math.max(sw, sh);
+  zoomCanvas.width = Math.round(sw * k);
+  zoomCanvas.height = Math.round(sh * k);
+  zoomCanvas.getContext("2d")!.drawImage(video, sx, sy, sw, sh, 0, 0, zoomCanvas.width, zoomCanvas.height);
+
+  type R = { detection: { box: Box; score: number }; landmarks: { positions: Pt[] }; descriptor: Float32Array };
+  let res: R[] = (await faceapi
+    .detectAllFaces(zoomCanvas, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3 }))
+    .withFaceLandmarks()
+    .withFaceDescriptors()) as unknown as R[];
+  if (!res.length) {
+    res = (await faceapi
+      .detectAllFaces(zoomCanvas, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.3 }))
+      .withFaceLandmarks()
+      .withFaceDescriptors()) as unknown as R[];
+  }
+  if (!res.length) return null;
+  // The face nearest the middle of the crop is the one we were aiming at.
+  const mx = zoomCanvas.width / 2;
+  const my = zoomCanvas.height / 2;
+  const r = res.reduce((a, z) => {
+    const da = Math.hypot(a.detection.box.x + a.detection.box.width / 2 - mx, a.detection.box.y + a.detection.box.height / 2 - my);
+    const dz = Math.hypot(z.detection.box.x + z.detection.box.width / 2 - mx, z.detection.box.y + z.detection.box.height / 2 - my);
+    return dz < da ? z : a;
+  });
+  const b = r.detection.box;
+  return {
+    box: { x: sx + b.x / k, y: sy + b.y / k, width: b.width / k, height: b.height / k },
+    score: r.detection.score,
+    frontal: frontalScore(r.landmarks.positions),
+    descriptor: Array.from(r.descriptor),
+  };
+}
+
+/**
+ * Read one face's fingerprint from the live video. With `near` (where the face was last seen)
+ * it reads that face directly; otherwise it first finds the biggest face in the frame.
+ */
+export async function describeFace(video: HTMLVideoElement, near?: Box | null): Promise<FaceRead | null> {
+  if (near) {
+    const r = await readRegion(video, near);
+    if (r) return r;
+  }
+  const faceapi = await loadFace();
+  const { canvas, back } = grabFrame(video, 640);
+  let dets = await faceapi.detectAllFaces(canvas, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.35 }));
+  if (!dets.length) dets = await faceapi.detectAllFaces(canvas, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.3 }));
+  if (!dets.length) return null;
+  const big = dets.reduce((a, z) => (z.box.width > a.box.width ? z : a)).box;
+  return readRegion(video, scaleBox({ x: big.x, y: big.y, width: big.width, height: big.height }, back));
+}
+
 export function distance(a: number[], b: number[]) {
   let s = 0;
   for (let i = 0; i < a.length; i++) s += (a[i] - b[i]) ** 2;

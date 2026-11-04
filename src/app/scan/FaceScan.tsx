@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { cameraErrorMessage, describeFaces, distance, loadFace, meanDescriptor, startCamera, stopCamera } from "@/lib/face";
+import { cameraErrorMessage, describeFace, distance, loadFace, meanDescriptor, startCamera, stopCamera, type Box, type FaceRead } from "@/lib/face";
 import { postJSON } from "@/lib/client";
 import { DevBall } from "@/components/DevBall";
 import { Lid } from "@/components/ui";
@@ -65,10 +65,12 @@ export default function FaceScan({
     const video = videoRef.current!;
     const samples: number[][] = [];
     let failures = 0;
+    let last: Box | null = null; // where the face was last seen: read it directly next time
+    let misses = 0;
     while (runningRef.current && samples.length < SAMPLES) {
-      let faces: Awaited<ReturnType<typeof describeFaces>> = [];
+      let f: FaceRead | null = null;
       try {
-        faces = await describeFaces(video);
+        f = await describeFace(video, last);
         failures = 0;
       } catch (err) {
         // Don't spin forever on a broken scanner: tell the person what happened.
@@ -84,24 +86,28 @@ export default function FaceScan({
       if (!runningRef.current) return;
       const vw = video.videoWidth;
       const vh = video.videoHeight;
-      if (faces.length === 0) setHint("No face found. Hold the phone at eye level, in good light, and look at the screen");
-      else if (faces.length > 1) setHint("Only your face in the frame, please");
-      else {
-        const f = faces[0];
+      if (!f) {
+        last = null;
+        // Only nag after a few misses in a row (a single missed frame is normal).
+        if (++misses >= 3) setHint("Can't see your face yet. Hold the phone at eye level, facing a light, and look at the screen");
+      } else {
+        misses = 0;
+        last = f.box;
         const cx = (f.box.x + f.box.width / 2) / vw;
         const cy = (f.box.y + f.box.height / 2) / vh;
-        if (f.box.width < Math.min(vw, vh) * 0.28) setHint("Move a little closer");
-        else if (Math.abs(cx - 0.5) > 0.2 || Math.abs(cy - 0.5) > 0.22) setHint("Center your face in the circle");
+        if (f.box.width < Math.min(vw, vh) * 0.15) setHint("Move a little closer");
+        else if (Math.abs(cx - 0.5) > 0.3 || Math.abs(cy - 0.5) > 0.32) setHint("Center your face in the circle");
         else if (f.frontal < FRONTAL_MIN_SCAN) setHint("Look straight at the camera, not to the side");
-        else if (f.score < 0.8) setHint("Hold still. Good light helps");
+        else if (f.score < 0.45) setHint("Hold still. A bit more light helps");
         else {
-          if (samples.length && distance(meanDescriptor(samples), f.descriptor) > 0.45) samples.length = 0;
+          // Keep samples consistent (same person, steady); a wild one restarts the count.
+          if (samples.length >= 2 && distance(meanDescriptor(samples), f.descriptor) > 0.5) samples.length = 0;
           samples.push(f.descriptor);
           setProgress(samples.length / SAMPLES);
           setHint(samples.length < SAMPLES ? "Perfect, hold still..." : "Got it!");
         }
       }
-      await new Promise((r) => setTimeout(r, 80));
+      await new Promise((r) => setTimeout(r, 60));
     }
     if (!runningRef.current) return;
     runningRef.current = false;
