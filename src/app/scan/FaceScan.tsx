@@ -15,7 +15,6 @@ export default function FaceScan({
   hasFace,
   name,
   mode = "register",
-  upgrade = false,
   password,
   username,
   onBack,
@@ -25,8 +24,6 @@ export default function FaceScan({
   name: string;
   /** "recover": find the account that owns this face and give it a new passcode. */
   mode?: "register" | "recover";
-  /** existing player re-scanning with the new scanner */
-  upgrade?: boolean;
   password?: string;
   username?: string;
   onBack?: () => void;
@@ -258,9 +255,7 @@ export default function FaceScan({
             <div className="dialog">
               {recover
                 ? "Now look at the camera. If your face matches your account, it gets the new passcode and you're back in."
-                : upgrade
-                  ? "PokeDev has a new, much more accurate face scanner! Re-scan your face once (about 5 seconds) so other players can catch you."
-                  : isNew
+                : isNew
                   ? `Last step, ${name.split(" ")[0]}! Let's scan your face so other trainers can catch you.`
                   : "Let's rescan your face. Use good light and hold your phone at eye level."}
             </div>

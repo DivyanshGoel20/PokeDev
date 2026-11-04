@@ -648,7 +648,7 @@ export default function CatchGame({
             } else {
               sfx.miss();
               S.ball = { k: "fall", t0: now, x, y, vx: (b.x1 - b.x0) / 60, vy: -2, s: b.s1 };
-              showToast("Missed! Swipe the ball toward a face in a target box.");
+              showToast("Missed! Swipe the DevBall toward a face in a target box, or just tap the face.");
             }
           }
           break;
@@ -731,7 +731,13 @@ export default function CatchGame({
               S.modalOpen = true;
               setNotLive({ token: res.invite ?? null });
             } else {
-              showToast(MESSAGES[(res?.result as keyof typeof MESSAGES) ?? "error"] ?? MESSAGES.error);
+              if (res?.result === "error" && res.error === "Not signed in") {
+                window.location.replace("/login"); // session ended: log in again instead of a confusing message
+              } else if (res?.result === "error" && res.error && !/Network error/i.test(res.error)) {
+                showToast(res.error); // e.g. "Too many tries. Wait a minute and try again."
+              } else {
+                showToast(MESSAGES[(res?.result as keyof typeof MESSAGES) ?? "error"] ?? MESSAGES.error);
+              }
             }
             S.ball = { k: "idle", t0: now };
           }

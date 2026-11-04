@@ -35,7 +35,7 @@ export default function AppShell({ initial }: { initial: AppState }) {
     try {
       const r = await fetch("/api/state", { cache: "no-store" });
       if (r.status === 401) {
-        window.location.replace("/");
+        window.location.replace("/login"); // session ended: straight to log in
         return null;
       }
       if (!r.ok) return null;
@@ -84,7 +84,9 @@ export default function AppShell({ initial }: { initial: AppState }) {
       known.current = new Set(caught);
       return;
     }
-    const fresh = state.dex.filter((e) => e.caught && e.username && !known.current!.has(e.username));
+    const fresh = state.dex.filter(
+      (e) => e.caught && e.username && !known.current!.has(e.username) && e.referredBy?.username === state.me.username,
+    );
     caught.forEach((u) => known.current!.add(u));
     if (!fresh.length) return;
     setBanner({
@@ -93,7 +95,7 @@ export default function AppShell({ initial }: { initial: AppState }) {
       action: "entry",
       no: fresh[0].no,
     });
-  }, [state.dex]);
+  }, [state.dex, state.me.username]);
 
   /* ---------- "someone caught you" banner ---------- */
   useEffect(() => {

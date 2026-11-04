@@ -20,11 +20,13 @@ export default function JoinForm() {
   }
   const [ref, setRef] = useState("");
   const [invite, setInvite] = useState<{ token: string; name: string } | null>(null);
+  const [inviteToken, setInviteToken] = useState(""); // kept even if expired: the referral still counts
 
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
     setRef((sp.get("ref") ?? "").replace(/[^a-z0-9_]/gi, "").slice(0, 20));
     const token = (sp.get("invite") ?? "").replace(/[^a-z0-9]/g, "");
+    setInviteToken(token);
     if (token) {
       fetch(`/api/invite?t=${token}`)
         .then((r) => r.json())
@@ -58,7 +60,7 @@ export default function JoinForm() {
     if (Object.keys(e2).length) return fail(e2);
     setErrs({});
     setBusy(true);
-    const r = await postJSON("/api/signup", { username, password, ...profile, invite: invite?.token, ref });
+    const r = await postJSON("/api/signup", { username, password, ...profile, invite: invite?.token || inviteToken || undefined, ref });
     if (r.error) {
       setBusy(false);
       if (/username/i.test(r.error)) {
