@@ -19,5 +19,6 @@ export async function POST(req: Request) {
   const descriptor = cleanDescriptor(body.descriptor);
   if (!descriptor) return NextResponse.json({ error: "Bad face data" }, { status: 400 });
 
-  return NextResponse.json(await tryCatch(me.id, descriptor));
+  // Which camera took the picture: only the selfie camera can ever see the catcher themselves.
+  return NextResponse.json(await tryCatch(me.id, descriptor, { selfie: body.facing === "user" }));
 }

@@ -223,17 +223,17 @@ export function profileFields(body: Record<string, unknown>) {
 }
 
 /** Nearest registered faces to a descriptor, by euclidean distance. */
-export async function nearestFaces(descriptor: number[], limit = 2) {
+export async function nearestFaces(descriptor: number[], limit = 2, excludeId = 0) {
   return q<{ id: number; username: string; catchable: boolean; dist: number }>(
     `WITH qv AS (SELECT x, i FROM unnest($1::float8[]) WITH ORDINALITY AS t(x, i))
      SELECT u.id, u.username, u.catchable, sqrt(sum((f.x - qv.x) ^ 2)) AS dist
      FROM users u
      CROSS JOIN LATERAL unnest(u.face) WITH ORDINALITY AS f(x, i)
      JOIN qv ON qv.i = f.i
-     WHERE u.face IS NOT NULL
+     WHERE u.face IS NOT NULL AND u.id <> $3
      GROUP BY u.id, u.username, u.catchable
      ORDER BY dist ASC
      LIMIT $2`,
-    [descriptor, limit],
+    [descriptor, limit, excludeId],
   );
 }

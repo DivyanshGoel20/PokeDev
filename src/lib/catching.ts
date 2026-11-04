@@ -8,17 +8,27 @@ export type CatchOutcome = { result: "caught" | "already" | "nomatch" | "hidden"
 /**
  * Compare a face descriptor against registered players and record a catch on a match.
  * Nothing about the descriptor is stored: it is compared, then discarded.
- * "nomatch" (shown as "not on PokeDev yet") is only returned when the face is clearly far from
- * every player; borderline cases return "unclear" so a real player is never told they're missing.
+ *
+ * - With the back camera the catcher is behind the phone, so they are never a candidate:
+ *   their own fingerprint is left out entirely (this is what used to cause a false "That's you").
+ * - "self" is only possible on the front (selfie) camera, and only on a confident match.
+ * - "nomatch" ("not on PokeDev yet") only when the face is clearly far from every player;
+ *   borderline cases return "unclear" so nobody is mis-caught or wrongly told they're missing.
  */
-export async function tryCatch(meId: number, descriptor: number[]): Promise<CatchOutcome> {
-  const [best, runnerUp] = await nearestFaces(descriptor, 2);
+export async function tryCatch(meId: number, descriptor: number[], opts: { selfie?: boolean } = {}): Promise<CatchOutcome> {
+  const confident = (d: number, margin: number) =>
+    (d <= MATCH.STRONG && margin >= MATCH.STRONG_MARGIN) || (d <= MATCH.LOOSE && margin >= MATCH.LOOSE_MARGIN);
+
+  if (opts.selfie) {
+    const [b, r] = await nearestFaces(descriptor, 2);
+    if (b && b.id === meId && confident(Number(b.dist), r ? Number(r.dist) - Number(b.dist) : Infinity)) return { result: "self" };
+  }
+
+  const [best, runnerUp] = await nearestFaces(descriptor, 2, meId);
   if (!best || Number(best.dist) > MATCH.UNSURE) return { result: "nomatch" };
   const d = Number(best.dist);
   const margin = runnerUp ? Number(runnerUp.dist) - d : Infinity;
-  const confident = (d <= MATCH.STRONG && margin >= MATCH.STRONG_MARGIN) || (d <= MATCH.LOOSE && margin >= MATCH.LOOSE_MARGIN);
-  if (!confident) return { result: "unclear" };
-  if (best.id === meId) return { result: "self" };
+  if (!confident(d, margin)) return { result: "unclear" };
   if (!best.catchable) return { result: "hidden" };
 
   const inserted = await q(

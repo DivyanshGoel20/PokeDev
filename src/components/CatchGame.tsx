@@ -250,7 +250,7 @@ export default function CatchGame({
           w = f.box.width;
           if (f.frontal < FRONTAL_MIN) continue; // side-on frames give unreliable fingerprints
           sawFrontal = true;
-          if (f.box.width < 64) {
+          if (f.box.width < 80) {
             tooSmall = true;
             continue;
           }
@@ -268,7 +268,10 @@ export default function CatchGame({
           if (distance(worst, m) > 0.25) use = samples.filter((s) => s !== worst);
         }
 
-        const r = await postJSON<ApiResult>("/api/catch", { descriptor: meanDescriptor(use) });
+        const r = await postJSON<ApiResult>("/api/catch", {
+          descriptor: meanDescriptor(use),
+          facing: g.current.mirrored ? "user" : "environment",
+        });
         if (r.error) {
           g.current.result = { result: "error", error: r.error };
         } else if ((r.result === "caught" || r.result === "already") && r.username) {
