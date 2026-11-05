@@ -102,7 +102,8 @@ function Landing() {
           <ul className="list-plain">
             <li>The camera never records or uploads photos or videos. It only reads faces in the moment, on your phone.</li>
             <li>Your face scan is saved as 128 numbers used only for matching.</li>
-            <li>Only registered players can be caught. If you throw at someone who isn&apos;t playing, nothing about them is kept, anywhere.</li>
+            <li>Only registered players can be caught. If you throw at someone who isn&apos;t playing, no photo or fingerprint of them is kept, anywhere.</li>
+            <li>On a close call, the thrower sees a player&apos;s name and type, so they can pick who&apos;s in front of them.</li>
             <li>Your profile picture is optional, and only players who catch you can see it.</li>
             <li>Hide mode any time. Deleting your account erases everything.</li>
           </ul>

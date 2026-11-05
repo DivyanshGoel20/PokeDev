@@ -100,9 +100,10 @@ export default function FaceScan({
         const cx = (f.box.x + f.box.width / 2) / vw;
         const cy = (f.box.y + f.box.height / 2) / vh;
         if (f.box.width < Math.min(vw, vh) * 0.15) setHint("Move a little closer");
+        else if (f.box.width > Math.min(vw, vh) * 0.75) setHint("Hold the phone a little further away, about arm's length");
         else if (Math.abs(cx - 0.5) > 0.3 || Math.abs(cy - 0.5) > 0.32) setHint("Center your face in the circle");
         else if (f.frontal < FRONTAL_MIN_SCAN) setHint("Look straight at the camera, not to the side");
-        else if (f.score < 0.45) setHint("Hold still. A bit more light helps");
+        else if (f.score < 0.45) setHint("Hold still, looking right at the camera");
         else {
           // Keep samples consistent (same person, steady); a wild one restarts the count.
           if (samples.length >= 2 && distance(meanDescriptor(samples), f.descriptor) > SAME_FACE_FRAMES) {

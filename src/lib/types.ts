@@ -110,9 +110,16 @@ export const FRONTAL_MIN_SCAN = 0.6;
 //  - correct catches: distance 0.29-0.39, with a gap of 0.13+ to the next player;
 //  - different people: as close as 0.45, median 0.65;
 //  - a stranger's nearest player: 0.45-0.61, with a tiny gap (median 0.017) to the next one.
-// So: STRONG/LOOSE = confident catch. Up to NEAR = probably a player, ask for a better look.
-// NEAR..UNSURE = can't tell a stranger from a poor reading: offer both options. Above UNSURE = nobody.
-export const MATCH = { STRONG: 0.4, STRONG_MARGIN: 0.06, LOOSE: 0.44, LOOSE_MARGIN: 0.1, NEAR: 0.45, UNSURE: 0.62 } as const;
+// So: STRONG/LOOSE = confident catch. Up to ASK = close but ambiguous, the thrower picks who it is.
+// ASK..UNSURE = can't tell a stranger from a poor reading: offer both options. Above UNSURE = nobody.
+export const MATCH = { STRONG: 0.4, STRONG_MARGIN: 0.06, LOOSE: 0.44, LOOSE_MARGIN: 0.1, ASK: 0.56, ASK_TWO_GAP: 0.06, UNSURE: 0.62 } as const;
+
+/**
+ * A close but ambiguous reading: the thrower can see who's in front of them, so they settle it.
+ * Real players and strangers overlap in this range (real throws on the live site, and the
+ * fingerprints themselves), so no cutoff could decide it alone without wrong catches.
+ */
+export type AskCandidate = { username: string; displayName: string; type: DevType; type2?: DevType; avatar?: string; caught: boolean };
 /**
  * Registering a face this close to another player's is refused (one face, one account).
  * Well below the 0.45 where different real people start, so new players aren't falsely blocked.

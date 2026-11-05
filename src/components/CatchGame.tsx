@@ -1,11 +1,11 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { cameraErrorMessage, coverMap, describeFace, detectBoxes, distance, meanDescriptor, startScanner, stopCamera, type Box, type TrackedFace } from "@/lib/face";
+import { DARK_LUMA, cameraErrorMessage, coverMap, cropBrightness, describeFace, detectBoxes, distance, meanDescriptor, startScanner, stopCamera, type Box, type TrackedFace } from "@/lib/face";
 import QRCode from "qrcode";
 import { ScannerProgressText } from "./PreloadScanner";
 import { postJSON } from "@/lib/client";
 import { sfx } from "@/lib/sfx";
-import { FRONTAL_MIN, SAME_FACE_FRAMES, builderTitle, type DexEntry } from "@/lib/types";
+import { FRONTAL_MIN, SAME_FACE_FRAMES, builderTitle, type AskCandidate, type DexEntry } from "@/lib/types";
 import { Icon, Portrait, TypeBadge, dexNo } from "./ui";
 import { DevBall } from "./DevBall";
 
@@ -50,8 +50,8 @@ function updateTracks(prev: Track[], dets: TrackedFace[], now: number): Track[] 
   return out;
 }
 
-type CatchResult = "caught" | "already" | "nomatch" | "unknown" | "hidden" | "self" | "unclear" | "side" | "far" | "error";
-type ApiResult = { result?: CatchResult; username?: string; error?: string };
+type CatchResult = "caught" | "already" | "nomatch" | "unknown" | "ask" | "hidden" | "self" | "unclear" | "dark" | "side" | "far" | "error";
+type ApiResult = { result?: CatchResult; username?: string; error?: string; attempt?: number; candidates?: AskCandidate[] };
 
 type Particle = { x: number; y: number; vx: number; vy: number; life: number; max: number; color: string; size: number; star?: boolean };
 
@@ -73,10 +73,11 @@ const DROP = 340;
 const WOBBLE = 640;
 const MIN_WOBBLES = 3;
 
-const MESSAGES: Record<Exclude<CatchResult, "caught" | "already" | "nomatch" | "unknown">, string> = {
+const MESSAGES: Record<Exclude<CatchResult, "caught" | "already" | "nomatch" | "unknown" | "ask">, string> = {
   hidden: "This builder is in hide mode right now. Try again later!",
   self: "That's you! You can't catch yourself.",
-  unclear: "Almost! Couldn't get a clear enough look. Get closer, face to face, in good light, and throw again.",
+  unclear: "Almost! Couldn't read their face that time. Hold steady, face to face, and throw again.",
+  dark: "Too dark to read their face. Find a bit more light and throw again.",
   side: "It broke free! They were facing sideways. Builders can only be caught face to face!",
   far: "Too far away! Get a little closer so the DevBall can read their face.",
   error: "Signal lost! Check your connection and try again.",
@@ -106,6 +107,8 @@ export default function CatchGame({
   const [toast, setToast] = useState("");
   const [modal, setModal] = useState<{ entry: DexEntry; fresh: boolean } | null>(null);
   const [notLive, setNotLive] = useState<{ token: string | null; unsure: boolean } | null>(null);
+  const [ask, setAsk] = useState<{ attempt: number; candidates: AskCandidate[] } | null>(null);
+  const [askBusy, setAskBusy] = useState(false);
   const [locked, setLocked] = useState(false); // a target is locked on
   const [focusFacing, setFocusFacing] = useState(true); // ...and it's face-on
   const [lonely, setLonely] = useState(false); // no face found for a while
@@ -233,7 +236,9 @@ export default function CatchGame({
         let sawFace = false;
         let sawFrontal = false;
         let tooSmall = false;
-        const deadline = performance.now() + 2200;
+        let frontal = 0;
+        const started = performance.now();
+        const deadline = started + 2200;
         while (samples.length < 4 && performance.now() < deadline) {
           const f = await describeFace(v, box).catch(() => null);
           if (!f) continue;
@@ -249,9 +254,12 @@ export default function CatchGame({
             continue;
           }
           samples.push(f.descriptor);
+          frontal = Math.max(frontal, f.frontal);
         }
         if (!samples.length) {
-          g.current.result = { result: !sawFace ? "unclear" : !sawFrontal ? "side" : tooSmall ? "far" : "unclear" };
+          // Only blame the light when the picture really is dark.
+          const noRead = cropBrightness(v, box) < DARK_LUMA ? "dark" : "unclear";
+          g.current.result = { result: !sawFace ? noRead : !sawFrontal ? "side" : tooSmall ? "far" : noRead };
           return;
         }
         // Average the frames, dropping an outlier (mid-blink, motion blur) first.
@@ -265,10 +273,18 @@ export default function CatchGame({
           return meanDescriptor(use);
         };
         const ask = () =>
-          postJSON<ApiResult>("/api/catch", { descriptor: blend(samples), facing: g.current.mirrored ? "user" : "environment" });
+          postJSON<ApiResult>("/api/catch", {
+            descriptor: blend(samples),
+            facing: g.current.mirrored ? "user" : "environment",
+            canAsk: true,
+            frames: samples.length,
+            facePx: Math.round(box.width),
+            frontal: +frontal.toFixed(3),
+            readMs: Math.round(performance.now() - started),
+          });
 
         let r = await ask();
-        if (r.result === "unclear" || r.result === "unknown") {
+        if (r.result === "ask" || r.result === "unknown") {
           // Borderline: take a second look (a few more frames, averaged with the first ones)
           // while the ball is still wobbling, before bothering the player with a message.
           const more = performance.now() + 1800;
@@ -694,6 +710,10 @@ export default function CatchGame({
             if ((res.result === "caught" || res.result === "already") && res.entry) {
               sfx.click();
               S.ball = { k: "click", t0: now, x: b.x, y: b.y, s: b.s };
+            } else if (res.result === "ask" && res.candidates?.length && res.attempt) {
+              S.ball = { k: "idle", t0: now };
+              S.modalOpen = true;
+              setAsk({ attempt: res.attempt, candidates: res.candidates });
             } else {
               sfx.fail();
               burst(b.x, b.y, 44, ["#fff", "#ffd6d2", "#f2553a"], 7);
@@ -795,7 +815,45 @@ export default function CatchGame({
     };
   }, [resolveCatch, showToast]);
 
+  /** The thrower's answer to "is this them?". `null` means it's none of the players offered. */
+  async function answerAsk(username: string | null) {
+    if (!ask || askBusy) return;
+    setAskBusy(true);
+    const r = await postJSON<ApiResult>("/api/catch/confirm", { attempt: ask.attempt, username });
+    if (r.error === "Not signed in") {
+      window.location.replace("/login");
+      return;
+    }
+    if (!username) {
+      // Not any of them: they may be new here, so offer the invite right away.
+      const inv = await postJSON<{ token?: string }>("/api/invite", {});
+      setAsk(null);
+      setAskBusy(false);
+      setNotLive({ token: inv.token ?? null, unsure: true });
+      return;
+    }
+    if (!r.error && (r.result === "caught" || r.result === "already") && r.username) {
+      const entry = await onCaught(r.username);
+      setAsk(null);
+      setAskBusy(false);
+      if (entry) {
+        sfx.success();
+        navigator.vibrate?.([30, 50, 30]);
+        setModal({ entry, fresh: r.result === "caught" });
+        return;
+      }
+      g.current.modalOpen = false;
+      showToast(MESSAGES.error);
+      return;
+    }
+    setAsk(null);
+    setAskBusy(false);
+    g.current.modalOpen = false;
+    showToast(r.error && !/Network error/i.test(r.error) ? r.error : (r.result === "hidden" ? MESSAGES.hidden : MESSAGES.error));
+  }
+
   function closeModal() {
+    setAsk(null);
     setModal(null);
     setNotLive(null);
     g.current.modalOpen = false;
@@ -884,7 +942,7 @@ export default function CatchGame({
       </div>
 
       {/* hint / messages */}
-      {status === "ready" && (toast || !hintGone || lonely || (locked && !focusFacing)) && !modal && !notLive && (
+      {status === "ready" && (toast || !hintGone || lonely || (locked && !focusFacing)) && !modal && !notLive && !ask && (
         <div
           style={{
             position: "absolute",
@@ -903,7 +961,7 @@ export default function CatchGame({
                 : locked
                   ? "Target locked! Swipe the DevBall at them, or tap any face to switch."
                   : lonely
-                    ? "Can't find a face. Point the camera at someone 1-2 m away, in good light, with their whole face in view."
+                    ? "Can't find a face yet. Point the camera at someone 1-2 m away, with their whole face in view."
                     : "Point your camera at another player...")}
           </div>
         </div>
@@ -941,6 +999,8 @@ export default function CatchGame({
         </div>
       )}
 
+      {ask && <AskModal candidates={ask.candidates} busy={askBusy} onAnswer={answerAsk} />}
+
       {notLive && <NotLiveModal token={notLive.token} unsure={notLive.unsure} inviter={inviter} onContinue={closeModal} />}
 
       {modal && (
@@ -953,6 +1013,67 @@ export default function CatchGame({
           }}
         />
       )}
+    </div>
+  );
+}
+
+/** A close but ambiguous reading: the thrower can see who's in front of them, so they settle it. */
+function AskModal({ candidates, busy, onAnswer }: { candidates: AskCandidate[]; busy: boolean; onAnswer: (username: string | null) => void }) {
+  const single = candidates.length === 1;
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 5,
+        background: "rgba(20,20,24,.78)",
+        overflowY: "auto",
+        padding: "calc(env(safe-area-inset-top) + 16px) 14px calc(env(safe-area-inset-bottom) + 16px)",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+      }}
+    >
+      <div style={{ maxWidth: 420, width: "100%", margin: "0 auto" }}>
+        <div className="dialog pop">
+          <div className="px" style={{ fontSize: 10, color: "var(--red)", marginBottom: 8 }}>
+            {single ? "IS THIS THEM?" : "WHICH ONE IS THIS?"}
+          </div>
+          {single ? "So close! Is this who's in front of you?" : "So close! Tap the builder who's in front of you."}
+        </div>
+        <div className="stack pop" style={{ marginTop: 12 }}>
+          {candidates.map((c) => (
+            <button
+              key={c.username}
+              className="panel"
+              disabled={busy}
+              onClick={() => onAnswer(c.username)}
+              style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", color: "inherit", cursor: "pointer", font: "inherit" }}
+              aria-label={`It's ${c.displayName}`}
+            >
+              <Portrait size={single ? 92 : 76} radius={10} username={c.username} displayName={c.displayName} type={c.type} caught avatar={c.avatar} />
+              <span style={{ minWidth: 0, flex: 1 }}>
+                <span style={{ display: "block", fontWeight: 700, fontSize: 18, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.displayName}</span>
+                <span className="small muted" style={{ display: "block", marginBottom: 6 }}>
+                  @{c.username}
+                  {c.caught ? " · already caught" : ""}
+                </span>
+                <TypeBadge type={c.type} type2={c.type2} />
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="stack" style={{ marginTop: 14 }}>
+          {single && (
+            <button className="btn btn-red" disabled={busy} onClick={() => onAnswer(candidates[0].username)}>
+              Yes, that&apos;s them!
+            </button>
+          )}
+          <button className="btn" disabled={busy} onClick={() => onAnswer(null)}>
+            {single ? "No, someone else" : "None of them"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

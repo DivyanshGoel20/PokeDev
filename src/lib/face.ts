@@ -324,6 +324,26 @@ export async function describeFace(video: HTMLVideoElement, near?: Box | null): 
   return readRegion(video, scaleBox({ x: big.x, y: big.y, width: big.width, height: big.height }, back));
 }
 
+/** Below this average brightness (0-255) a face really is too dark to read. */
+export const DARK_LUMA = 45;
+
+/** Average brightness of a region of the video, measured rather than guessed. */
+export function cropBrightness(video: HTMLVideoElement, region: Box): number {
+  try {
+    const c = document.createElement("canvas");
+    c.width = 16;
+    c.height = 16;
+    const ctx = c.getContext("2d", { willReadFrequently: true })!;
+    ctx.drawImage(video, region.x, region.y, Math.max(1, region.width), Math.max(1, region.height), 0, 0, 16, 16);
+    const px = ctx.getImageData(0, 0, 16, 16).data;
+    let sum = 0;
+    for (let i = 0; i < px.length; i += 4) sum += 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+    return sum / (16 * 16);
+  } catch {
+    return 255; // can't measure: don't claim it's dark
+  }
+}
+
 export function distance(a: number[], b: number[]) {
   let s = 0;
   for (let i = 0; i < a.length; i++) s += (a[i] - b[i]) ** 2;

@@ -49,6 +49,24 @@ CREATE TABLE IF NOT EXISTS rate_limits (
   window_start TIMESTAMPTZ NOT NULL,
   hits INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS catch_attempts (
+  id BIGSERIAL PRIMARY KEY,
+  catcher_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  best_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  second_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  d REAL,
+  margin REAL,
+  result TEXT NOT NULL,
+  frames INTEGER,
+  face_px INTEGER,
+  frontal REAL,
+  read_ms INTEGER,
+  selfie BOOLEAN NOT NULL DEFAULT FALSE,
+  confirmed_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  answered_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS catch_attempts_catcher_idx ON catch_attempts(catcher_id, created_at);
 UPDATE users u SET referred_by = i.catcher_id, referred_at = i.created_at FROM invites i WHERE i.used_by = u.id AND u.referred_by IS NULL AND i.catcher_id <> u.id;
 `;
 
@@ -85,6 +103,7 @@ async function createRunner(): Promise<Runner> {
   const ready = await run(
     `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'referred_at')
         AND EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'rate_limits')
+        AND EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'catch_attempts')
         AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'catches' AND column_name = 'photo')
         AS ok`,
   ).catch(() => [{ ok: false }]);
